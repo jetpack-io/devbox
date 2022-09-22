@@ -5,27 +5,30 @@ go 1.19
 require (
 	cuelang.org/go v0.4.3
 	github.com/bmatcuk/doublestar/v4 v4.2.0
+	github.com/cavaliergopher/grab/v3 v3.0.1
+	github.com/creekorful/mvnparser v1.5.0
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/fatih/color v1.13.0
-	github.com/google/go-cmp v0.4.0
+	github.com/google/go-cmp v0.5.5
 	github.com/imdario/mergo v0.3.13
+	github.com/nix-community/go-nix v0.0.0-20220906172053-6b0185c1190b
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/segmentio/analytics-go v3.1.0+incompatible
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.0
+	github.com/ulikunitz/xz v0.5.10
 	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17
 	golang.org/x/mod v0.6.0-dev.0.20211013180041-c96bc1413d57
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require golang.org/x/net v0.0.0-20200226121028-0de0cce0169b // indirect
+require golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 
 require (
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/cockroachdb/apd/v2 v2.0.1 // indirect
-	github.com/creekorful/mvnparser v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
