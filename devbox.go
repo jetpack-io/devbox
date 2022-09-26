@@ -5,7 +5,9 @@
 package devbox
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"go.jetpack.io/devbox/cuecfg"
@@ -24,7 +26,19 @@ const configFilename = "devbox.json"
 // exist.
 func InitConfig(dir string) (created bool, err error) {
 	cfgPath := filepath.Join(dir, configFilename)
-	return cuecfg.InitFile(cfgPath, &Config{})
+	created, err = cuecfg.InitFile(cfgPath, &Config{})
+	if err != nil {
+		return created, err
+	}
+	if created {
+		// Apply any available fixes to new configs.
+		box, err := Open(dir)
+		if err != nil {
+			return created, err
+		}
+		return created, box.Fix()
+	}
+	return created, err
 }
 
 // Devbox provides an isolated development environment that contains a set of
@@ -115,6 +129,44 @@ func (d *Devbox) BuildPlan() (*plansdk.Plan, error) {
 		return nil, err
 	}
 	return plansdk.MergeUserPlan(userPlan, buildPlan)
+}
+
+// Fix applies one or more automated fixes to the config.
+func (d *Devbox) Fix() error {
+	// This method currently only applies the "prompt" fix, but if we ever
+	// want to support more fixes we can add a variadic argument for a list
+	// of fixes.
+
+	needsFix := true
+	for _, cmd := range d.cfg.Shell.InitHook.Cmds {
+		// Don't do anything if we or the user have already added a
+		// command that looks like it sets a prompt. This obviously
+		// isn't bulletproof, but it's good enough to make the fix
+		// itself idempotent.
+		if strings.Contains(cmd, "PS1=") {
+			needsFix = false
+			break
+		}
+	}
+	if !needsFix {
+		return nil
+	}
+
+	// Include the config's directory name in the prompt if we can get it.
+	// Otherwise just use a generic devbox prompt.
+	prompt := `	PS1="(devbox) $PS1"`
+	if abs, err := filepath.Abs(d.srcDir); err == nil {
+		prompt = fmt.Sprintf(`	PS1="(devbox:%s) $PS1"`, filepath.Base(abs))
+	}
+	d.cfg.Shell.InitHook.Cmds = append(d.cfg.Shell.InitHook.Cmds, []string{
+		`# Here you can remove or customize the prompt for your project's devbox shell.`,
+		`# By convention, individual users can set DEVBOX_NO_PROMPT=1 in their shell's`,
+		`# rc file to opt out of prompt customization.`,
+		`if [ -z "$DEVBOX_NO_PROMPT" ]; then`,
+		prompt,
+		`fi`,
+	}...)
+	return errors.Wrap(d.saveCfg(), "fix: save config")
 }
 
 // Generate creates the directory of Nix files and the Dockerfile that define

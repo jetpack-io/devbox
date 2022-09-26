@@ -32,9 +32,6 @@ PATH="$(
 	echo "${nix_path:+$nix_path:}${non_nix_path}"
 )"
 
-# Prepend to the prompt to make it clear we're in a devbox shell.
-export PS1="(devbox) $PS1"
-
 # End Devbox Post-init Hook
 
 # Begin Devbox User Hook
