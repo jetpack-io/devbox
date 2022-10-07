@@ -224,17 +224,21 @@ func (d *Devbox) convertToPlan() *plansdk.Plan {
 			}
 		}
 	}
-	return &plansdk.Plan{
+	p := &plansdk.Plan{
 		DevPackages:     d.cfg.Packages,
 		RuntimePackages: d.cfg.Packages,
 		InstallStage:    planStages[0],
 		BuildStage:      planStages[1],
 		StartStage:      planStages[2],
 	}
+	fmt.Printf("PLAN IS: %+v\n", p)
+	return p
 }
 
 func (d *Devbox) generateShellFiles() error {
-	return generate(d.srcDir, d.ShellPlan(), shellFiles)
+	err := generate(d.srcDir, d.ShellPlan(), shellFiles)
+	fmt.Println("Done generating!")
+	return err
 }
 
 func (d *Devbox) generateBuildFiles() error {
@@ -319,6 +323,7 @@ const (
 
 func (d *Devbox) ensurePackagesAreInstalled(mode installMode) error {
 	if err := d.generateShellFiles(); err != nil {
+		fmt.Println("ERROR:", err)
 		return err
 	}
 
@@ -326,7 +331,7 @@ func (d *Devbox) ensurePackagesAreInstalled(mode installMode) error {
 	if mode == uninstall {
 		installingVerb = "Uninstalling"
 	}
-	fmt.Fprintf(d.writer, "%s nix packages. This may take a while...", installingVerb)
+	fmt.Printf("%s nix packages. This may take a while...\n", installingVerb)
 
 	// We need to re-install the packages
 	if err := d.applyDevNixDerivation(); err != nil {
@@ -367,13 +372,17 @@ func (d *Devbox) applyDevNixDerivation() error {
 	}
 
 	cmd := exec.Command("nix-env",
+		"--verbose",
 		"--profile", profileDir,
 		"--install",
 		"-f", filepath.Join(d.srcDir, ".devbox/gen/development.nix"),
 	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stdout
 
 	debug.Log("Running command: %s\n", cmd.Args)
-	_, err = cmd.Output()
+	err = cmd.Run()
+	debug.Log("Done running command: %s\n", cmd.Args)
 
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -39,7 +40,8 @@ func PkgInfo(pkg string) (*Info, bool) {
 	buf := new(bytes.Buffer)
 	attr := fmt.Sprintf("nixpkgs.%s", pkg)
 	cmd := exec.Command("nix-env", "--json", "-qa", "-A", attr)
-	cmd.Stdout = buf
+	cmd.Stdout = io.MultiWriter(buf, os.Stdout)
+	cmd.Stderr = io.MultiWriter(buf, os.Stdout)
 	err := cmd.Run()
 	if err != nil {
 		// nix-env returns an error if the package name is invalid, for now assume

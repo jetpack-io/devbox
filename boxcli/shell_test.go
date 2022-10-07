@@ -16,12 +16,7 @@ import (
 )
 
 func testShellHello(t *testing.T, name string) {
-	// Skip this test if the required shell isn't installed, unless we're
-	// running in CI.
 	ci, _ := strconv.ParseBool(os.Getenv("CI"))
-	if ci {
-		t.Skip("Skipping because this test times out in CI.")
-	}
 	if _, err := exec.LookPath(name); err != nil && !ci {
 		t.Skipf("Skipping because %s isn't installed or in your PATH.", name)
 	}
@@ -29,6 +24,11 @@ func testShellHello(t *testing.T, name string) {
 	sh := newShell(t, name)
 	sh.parentIO.write(t, "devbox init")
 	sh.parentIO.write(t, "devbox add hello")
+	go func() {
+		for {
+			sh.parentIO.read(t)
+		}
+	}()
 	sh.startDevboxShell(t)
 
 	sh.devboxIO.write(t, `echo "My name is: $0"`)
@@ -54,8 +54,8 @@ const (
 	// waiting for a shell prompt.
 	shellMaxStartupReads = 10_000
 
-	shellReadTimeout  = 3 * time.Minute
-	shellWriteTimeout = 3 * time.Minute
+	shellReadTimeout  = 10 * time.Second
+	shellWriteTimeout = 10 * time.Second
 )
 
 // shellIO allows tests to write input and read output to and from a shell.

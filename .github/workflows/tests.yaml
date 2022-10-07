@@ -43,7 +43,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-12]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v3
@@ -65,10 +65,17 @@ jobs:
         run: |
           sh <(curl -L https://nixos.org/nix/install) --no-modify-profile --daemon --daemon-user-count 1
           . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-          nix-build '<nixpkgs>' -A stdenv -A bash -A hello
           echo "__ETC_PROFILE_NIX_SOURCED=1" >> $GITHUB_ENV
           echo "NIX_PROFILES=$NIX_PROFILES" >> $GITHUB_ENV
           echo "NIX_SSL_CERT_FILE=$NIX_SSL_CERT_FILE" >> $GITHUB_ENV
           echo "PATH=$PATH" >> $GITHUB_ENV
+      - name: Install Nix packages
+        run: nix-build '<nixpkgs>' -A mkShell -A hello
       - name: Run tests
-        run: go test -race -cover ./...
+        env:
+          DEVBOX_DEBUG: 1
+        run: |
+          if [ "$RUNNER_DEBUG" = "1" ]; then
+            ls /nix/store
+          fi
+          go test ${RUNNER_DEBUG:+-v} -race -cover ./...
