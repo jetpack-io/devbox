@@ -77,3 +77,21 @@ jobs:
           echo "PATH=$PATH" >> $GITHUB_ENV
       - name: Run tests
         run: go test -race -cover ./...
+
+  cli-cicd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install devbox
+        run: |
+          curl -fsSL https://get.jetpack.io/devbox | FORCE=1 bash
+      - name: Install nix and devbox packages
+        run: |
+          NIX_INSTALLER_NO_CHANNEL_ADD=1
+          devbox shell -- echo "Installing nix..." || true
+          source /home/runner/.nix-profile/etc/profile.d/nix.sh
+          devbox shell -- echo "Installing packages..."
+      - name: Run test
+        run: |
+          source /home/runner/.nix-profile/etc/profile.d/nix.sh
+          devbox run build
