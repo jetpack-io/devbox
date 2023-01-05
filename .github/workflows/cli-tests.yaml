@@ -83,14 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install devbox
-        run: |
-          curl -fsSL https://get.jetpack.io/devbox | FORCE=1 bash
-      - name: Install nix and devbox packages
-        run: |
-          NIX_INSTALLER_NO_CHANNEL_ADD=1
-          devbox shell -- echo "Installing nix..." || true
-          source /home/runner/.nix-profile/etc/profile.d/nix.sh
-          devbox shell -- echo "Installing packages..."
+        uses: jetpack-io/devbox-install-action@v0.1.0
       - name: Run test
         run: |
           source /home/runner/.nix-profile/etc/profile.d/nix.sh
