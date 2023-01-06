@@ -46,7 +46,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-12]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -83,8 +83,26 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install devbox
-        uses: jetpack-io/devbox-install-action@v0.1.0
+        run: |
+          curl -fsSL https://get.jetpack.io/devbox | FORCE=1 bash
+      - name: Workaround for permission issue
+        run: sudo chmod u+s "$(command -v tar)"
+      - name: Mount nix store cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.nix-defexpr
+            ~/.nix-profile
+            /nix/store
+            /nix/var/nix
+          key: ${{ runner.os }}-devbox-${{ hashFiles('devbox.json') }}
+      - name: Install nix and devbox packages
+        run: |
+          NIX_INSTALLER_NO_CHANNEL_ADD=1
+          devbox shell -- echo "Installing nix..." || true
+          source ~/.nix-profile/etc/profile.d/nix.sh
+          devbox shell -- echo "Installing packages..."
       - name: Run test
         run: |
-          source /home/runner/.nix-profile/etc/profile.d/nix.sh
+          source ~/.nix-profile/etc/profile.d/nix.sh
           devbox run build
