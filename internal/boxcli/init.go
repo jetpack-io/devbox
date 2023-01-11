@@ -30,5 +30,13 @@ func runInitCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	box, err := devbox.Open(path, cmd.ErrOrStderr())
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	err = box.GenerateEnvrc(false)
+	if err != nil {
+		return errors.WithStack(err)
+	}
 	return nil
 }

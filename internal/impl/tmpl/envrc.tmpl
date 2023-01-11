@@ -3,9 +3,13 @@
 
 use_devbox() {
     watch_file devbox.json
-    eval $(devbox shell --print-env)
+    if [ -f .devbox/gen/shell.nix ]; then
+        use nix .devbox/gen/shell.nix
+    fi
 }
 use devbox
+
+
 
 # check out https://www.jetpack.io/devbox/docs/ide_configuration/direnv/ 
 # for more details

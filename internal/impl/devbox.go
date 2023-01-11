@@ -60,34 +60,6 @@ func InitConfig(dir string, writer io.Writer) (created bool, err error) {
 			color.HiYellowString(s),
 		)
 	}
-	// .envrc file creation
-	if commandExists("direnv") {
-		// prompt for direnv allow
-		var result string
-		prompt := &survey.Input{
-			Message: "Do you want to enable direnv integration for this devbox project?[y/n]",
-		}
-		err = survey.AskOne(prompt, &result)
-		if err != nil {
-			return false, errors.WithStack(err)
-		}
-
-		if strings.ToLower(result) == "y" {
-			envrcfilePath := filepath.Join(dir, ".envrc")
-			filesExist := fileutil.Exists(envrcfilePath)
-			if !filesExist { // don't overwrite an existing .envrc
-				err := generate.CreateEnvrc(tmplFS, dir)
-				if err != nil {
-					return false, errors.WithStack(err)
-				}
-			}
-			cmd := exec.Command("direnv", "allow")
-			err = cmd.Run()
-			if err != nil {
-				return false, errors.WithStack(err)
-			}
-		}
-	}
 
 	return cuecfg.InitFile(cfgPath, config)
 }
@@ -491,9 +463,31 @@ func (d *Devbox) GenerateEnvrc(force bool) error {
 	filesExist := fileutil.Exists(envrcfilePath)
 	// confirm .envrc doesn't exist and don't overwrite an existing .envrc
 	if force || !filesExist {
-		err := generate.CreateEnvrc(tmplFS, d.projectDir)
-		if err != nil {
-			return errors.WithStack(err)
+		// .envrc file creation
+		if commandExists("direnv") {
+			// prompt for direnv allow
+			var result string
+			prompt := &survey.Input{
+				Message: "Do you want to enable direnv integration for this devbox project?[y/n]",
+			}
+			err := survey.AskOne(prompt, &result)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+
+			if strings.ToLower(result) == "y" {
+				if !filesExist { // don't overwrite an existing .envrc
+					err := generate.CreateEnvrc(tmplFS, d.projectDir)
+					if err != nil {
+						return errors.WithStack(err)
+					}
+				}
+				cmd := exec.Command("direnv", "allow")
+				err = cmd.Run()
+				if err != nil {
+					return errors.WithStack(err)
+				}
+			}
 		}
 	} else {
 		return usererr.New(
