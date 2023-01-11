@@ -72,6 +72,11 @@ jobs:
           #     "devbox-docs-preview-" and "-ref" for a max of 63.
           safe_github_ref="$(echo "${GITHUB_REF_NAME}" | sed "s/[^0-9a-zA-Z]/-/g" | cut -b -32)"
           namespace="$(echo "jetpack-io-preview-devbox-${safe_github_ref}-ref" | tr -s -)"
+          echo "launchpad auth whoami"
+          launchpad auth whoami
+          cat ~/.kube/config || echo 1
+          launchpad auth get-registry-credentials > /dev/null
+          cat ~/.kube/config || echo 1
           launchpad up docs \
             --ttl 300 --debug \
             -n "$namespace"
