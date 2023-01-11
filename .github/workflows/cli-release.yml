@@ -21,6 +21,8 @@ on:
 permissions:
   contents: write
   pull-requests: read
+  id-token: write # Needed for aws-actions/configure-aws-credentials@v1
+
 
 jobs:
   tests:
@@ -92,3 +94,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TELEMETRY_KEY: ${{ secrets.TELEMETRY_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          aws-region: us-west-2
+      - name: Update latest version in s3
+        run: |
+          tmp_file=$(mktemp)
+          echo "${{ env.release_tag }}" > $tmp_file
+          aws s3 cp $tmp_file s3://releases.jetpack.io/devbox/latest/version
