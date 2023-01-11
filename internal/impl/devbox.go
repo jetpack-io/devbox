@@ -158,18 +158,18 @@ func (d *Devbox) Add(pkgs ...string) error {
 	if err := d.ensurePackagesAreInstalled(install); err != nil {
 		return err
 	}
-	if featureflag.PKGConfig.Enabled() {
-		for _, pkg := range pkgs {
-			if err := plugin.PrintReadme(
-				pkg,
-				d.projectDir,
-				d.writer,
-				false, /*markdown*/
-			); err != nil {
-				return err
-			}
+
+	for _, pkg := range pkgs {
+		if err := plugin.PrintReadme(
+			pkg,
+			d.projectDir,
+			d.writer,
+			false, /*markdown*/
+		); err != nil {
+			return err
 		}
 	}
+
 	return d.printPackageUpdateMessage(install, pkgs)
 }
 
@@ -193,10 +193,8 @@ func (d *Devbox) Remove(pkgs ...string) error {
 		return err
 	}
 
-	if featureflag.PKGConfig.Enabled() {
-		if err := plugin.Remove(d.projectDir, uninstalledPackages); err != nil {
-			return err
-		}
+	if err := plugin.Remove(d.projectDir, uninstalledPackages); err != nil {
+		return err
 	}
 
 	if err := d.ensurePackagesAreInstalled(uninstall); err != nil {
@@ -245,23 +243,18 @@ func (d *Devbox) Shell() error {
 		return err
 	}
 
+	env, err := plugin.Env(d.cfg.Packages, d.projectDir)
+	if err != nil {
+		return err
+	}
+
 	opts := []nix.ShellOption{
 		nix.WithPluginInitHook(strings.Join(pluginHooks, "\n")),
 		nix.WithProfile(profileDir),
 		nix.WithHistoryFile(filepath.Join(d.projectDir, shellHistoryFile)),
 		nix.WithProjectDir(d.projectDir),
-	}
-	// TODO: separate package suggestions from shell planners
-	if featureflag.PKGConfig.Enabled() {
-		env, err := plugin.Env(d.cfg.Packages, d.projectDir)
-		if err != nil {
-			return err
-		}
-		opts = append(
-			opts,
-			nix.WithEnvVariables(env),
-			nix.WithPKGConfigDir(filepath.Join(d.projectDir, plugin.VirtenvBinPath)),
-		)
+		nix.WithEnvVariables(env),
+		nix.WithPKGConfigDir(filepath.Join(d.projectDir, plugin.VirtenvBinPath)),
 	}
 
 	shell, err := nix.DetectShell(opts...)
@@ -323,24 +316,19 @@ func (d *Devbox) RunScript(scriptName string) error {
 		return err
 	}
 
+	env, err := plugin.Env(d.cfg.Packages, d.projectDir)
+	if err != nil {
+		return err
+	}
+
 	opts := []nix.ShellOption{
 		nix.WithPluginInitHook(strings.Join(pluginHooks, "\n")),
 		nix.WithProfile(profileDir),
 		nix.WithHistoryFile(filepath.Join(d.projectDir, shellHistoryFile)),
 		nix.WithUserScript(scriptName, script.String()),
 		nix.WithProjectDir(d.projectDir),
-	}
-
-	if featureflag.PKGConfig.Enabled() {
-		env, err := plugin.Env(d.cfg.Packages, d.projectDir)
-		if err != nil {
-			return err
-		}
-		opts = append(
-			opts,
-			nix.WithEnvVariables(env),
-			nix.WithPKGConfigDir(filepath.Join(d.projectDir, plugin.VirtenvBinPath)),
-		)
+		nix.WithEnvVariables(env),
+		nix.WithPKGConfigDir(filepath.Join(d.projectDir, plugin.VirtenvBinPath)),
 	}
 
 	shell, err := nix.DetectShell(opts...)
@@ -374,18 +362,13 @@ func (d *Devbox) Exec(cmds ...string) error {
 		return err
 	}
 
-	env := []string{}
-	virtenvBinPath := ""
-	if featureflag.PKGConfig.Enabled() {
-		envMap, err := plugin.Env(d.cfg.Packages, d.projectDir)
-		if err != nil {
-			return err
-		}
-		for k, v := range envMap {
-			env = append(env, fmt.Sprintf("%s=%s", k, v))
-		}
-		virtenvBinPath = filepath.Join(d.projectDir, plugin.VirtenvBinPath) + ":"
+	env, err := plugin.Env(d.cfg.Packages, d.projectDir)
+	if err != nil {
+		return err
 	}
+
+	virtenvBinPath := filepath.Join(d.projectDir, plugin.VirtenvBinPath) + ":"
+
 	pathWithProfileBin := fmt.Sprintf("PATH=%s%s:$PATH", virtenvBinPath, profileBinDir)
 	cmds = append([]string{pathWithProfileBin}, cmds...)
 
@@ -578,13 +561,7 @@ func (d *Devbox) ensurePackagesAreInstalled(mode installMode) error {
 	}
 	fmt.Fprintln(d.writer, "done.")
 
-	if featureflag.PKGConfig.Enabled() {
-		if err := plugin.RemoveInvalidSymlinks(d.projectDir); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return plugin.RemoveInvalidSymlinks(d.projectDir)
 }
 
 func (d *Devbox) printPackageUpdateMessage(

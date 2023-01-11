@@ -55,11 +55,9 @@ func generateForShell(rootPath string, plan *plansdk.ShellPlan, pluginManager *p
 		}
 	}
 
-	if featureflag.PKGConfig.Enabled() {
-		for _, pkg := range plan.DevPackages {
-			if err := pluginManager.CreateFilesAndShowReadme(pkg, rootPath); err != nil {
-				return err
-			}
+	for _, pkg := range plan.DevPackages {
+		if err := pluginManager.CreateFilesAndShowReadme(pkg, rootPath); err != nil {
+			return err
 		}
 	}
 

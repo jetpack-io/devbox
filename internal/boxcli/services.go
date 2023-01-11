@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"go.jetpack.io/devbox"
-	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 )
 
 type servicesCmdFlags struct {
@@ -17,9 +16,8 @@ type servicesCmdFlags struct {
 func ServicesCmd() *cobra.Command {
 	flags := servicesCmdFlags{}
 	servicesCommand := &cobra.Command{
-		Use:    "services",
-		Hidden: !featureflag.PKGConfig.Enabled(),
-		Short:  "Interact with devbox services",
+		Use:   "services",
+		Short: "Interact with devbox services",
 	}
 
 	lsCommand := &cobra.Command{

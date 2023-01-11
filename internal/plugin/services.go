@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 
+	"github.com/samber/lo"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 )
 
@@ -49,32 +51,32 @@ func (s *Services) UnmarshalJSON(b []byte) error {
 }
 
 func StartServices(pkgs, serviceNames []string, root string, w io.Writer) error {
-	services, err := GetServices(pkgs, root)
-	if err != nil {
-		return err
-	}
-	for _, name := range serviceNames {
-		service, found := services[name]
-		if !found {
-			return usererr.New("Service not found")
-		}
-		cmd := exec.Command("sh", "-c", service.Start)
-		cmd.Stdout = w
-		cmd.Stderr = w
-		if err = cmd.Run(); err != nil {
-			if len(serviceNames) == 1 {
-				return usererr.WithUserMessage(err, "Service %q failed to start", name)
-			}
-			fmt.Fprintf(w, "Service %q failed to start. Error = %s\n", name, err)
-		} else {
-			fmt.Fprintf(w, "Service %q started\n", name)
-		}
-	}
-	return nil
+	return toggleServices(pkgs, serviceNames, root, w, startService)
 }
 
 func StopServices(pkgs, serviceNames []string, root string, w io.Writer) error {
+	return toggleServices(pkgs, serviceNames, root, w, stopService)
+}
+
+type serviceAction int
+
+const (
+	startService serviceAction = iota
+	stopService
+)
+
+func toggleServices(
+	pkgs,
+	serviceNames []string,
+	root string,
+	w io.Writer,
+	action serviceAction,
+) error {
 	services, err := GetServices(pkgs, root)
+	if err != nil {
+		return err
+	}
+	envVars, err := Env(pkgs, root)
 	if err != nil {
 		return err
 	}
@@ -83,16 +85,24 @@ func StopServices(pkgs, serviceNames []string, root string, w io.Writer) error {
 		if !found {
 			return usererr.New("Service not found")
 		}
-		cmd := exec.Command("sh", "-c", service.Stop)
+		cmd := exec.Command(
+			"sh",
+			"-c",
+			lo.Ternary(action == startService, service.Start, service.Stop),
+		)
 		cmd.Stdout = w
 		cmd.Stderr = w
+		cmd.Env = envVars
+		cmd.Env = append(cmd.Env, os.Environ()...)
 		if err = cmd.Run(); err != nil {
+			actionString := lo.Ternary(action == startService, "start", "stop")
 			if len(serviceNames) == 1 {
-				return usererr.WithUserMessage(err, "Service %q failed to stop", name)
+				return usererr.WithUserMessage(err, "Service %q failed to %s", name, actionString)
 			}
-			fmt.Fprintf(w, "Service %q failed to stop. Error = %s\n", name, err)
+			fmt.Fprintf(w, "Service %q failed to %s. Error = %s\n", name, actionString, err)
 		} else {
-			fmt.Fprintf(w, "Service %q stopped\n", name)
+			actionStringPast := lo.Ternary(action == startService, "started", "stopped")
+			fmt.Fprintf(w, "Service %q %s\n", name, actionStringPast)
 		}
 	}
 	return nil

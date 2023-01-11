@@ -103,8 +103,8 @@ func (m *Manager) CreateFilesAndShowReadme(pkg, projectDir string) error {
 
 }
 
-func Env(pkgs []string, projectDir string) (map[string]string, error) {
-	env := map[string]string{}
+func Env(pkgs []string, projectDir string) ([]string, error) {
+	env := []string{}
 	for _, pkg := range pkgs {
 		cfg, err := getConfigIfAny(pkg, projectDir)
 		if err != nil {
@@ -114,7 +114,7 @@ func Env(pkgs []string, projectDir string) (map[string]string, error) {
 			continue
 		}
 		for k, v := range cfg.Env {
-			env[k] = v
+			env = append(env, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
 	return env, nil
@@ -134,12 +134,13 @@ func createEnvFile(pkg, projectDir string) error {
 		return err
 	}
 	env := ""
-	for k, v := range envVars {
-		escaped, err := json.Marshal(v)
+	for _, val := range envVars {
+		parts := strings.SplitN(val, "=", 2)
+		escaped, err := json.Marshal(parts[1])
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		env += fmt.Sprintf("export %s=%s\n", k, escaped)
+		env += fmt.Sprintf("export %s=%s\n", parts[0], escaped)
 	}
 	filePath := filepath.Join(projectDir, VirtenvPath, pkg, "/env")
 	if err = createDir(filepath.Dir(filePath)); err != nil {

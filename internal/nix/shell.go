@@ -125,11 +125,9 @@ func WithHistoryFile(historyFile string) ShellOption {
 	}
 }
 
-func WithEnvVariables(envVariables map[string]string) ShellOption {
+func WithEnvVariables(envVariables []string) ShellOption {
 	return func(s *Shell) {
-		for k, v := range envVariables {
-			s.env = append(s.env, fmt.Sprintf("%s=%s", k, v))
-		}
+		s.env = append(s.env, envVariables...)
 	}
 }
 
