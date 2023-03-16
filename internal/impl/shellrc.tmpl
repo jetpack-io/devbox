@@ -47,31 +47,13 @@ devbox log shell-ready {{ .ShellStartTime }}
 
 # End Devbox Post-init Hook
 
+. .devbox/gen/scripts/.hooks.sh
+#. "{ .InitHooks }"
+
 # Run plugin and user init hooks from the devbox.json directory.
-working_dir="$(pwd)"
-cd "{{ .ProjectDir }}" || exit
-
-{{- if .PluginInitHook }}
-
-# Begin Plugin Init Hook
-
-{{ .PluginInitHook }}
-
-# End Plugin Init Hook
-
-{{- end }}
-
-{{- if .UserHook }}
-
-# Begin Devbox User Hook
-
-{{ .UserHook }}
-
-# End Devbox User Hook
-
-{{- end }}
-
-cd "$working_dir" || exit
+#working_dir="$(pwd)"
+#cd "{{ .ProjectDir }}" || exit
+#cd "$working_dir" || exit
 
 {{- if .ShellStartTime }}
 # log that the shell is interactive now!
