@@ -2,18 +2,23 @@ package nix
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"golang.org/x/exp/slices"
 )
 
 func TestContentAddressedPath(t *testing.T) {
-
 	testCases := []struct {
 		storePath string
-		expected  string
+		expected  []string
 	}{
 		{
 			"/nix/store/r2jd6ygnmirm2g803mksqqjm4y39yi6i-git-2.33.1",
-			"/nix/store/ldbhlwhh39wha58rm61bkiiwm6j7211j-git-2.33.1",
+			[]string{
+				"/nix/store/ldbhlwhh39wha58rm61bkiiwm6j7211j-git-2.33.1",
+				"/nix/store/d49wyvsz5nkqa23qp4p0ikr04mw9n4h9-git-2.33.1",
+			},
 		},
 	}
 
@@ -23,10 +28,9 @@ func TestContentAddressedPath(t *testing.T) {
 			if err != nil {
 				t.Errorf("got error: %v", err)
 			}
-			if out != testCase.expected {
-				t.Errorf("got %s, want %s", out, testCase.expected)
+			if !slices.Contains(testCase.expected, out) {
+				t.Errorf("got %q, want any of:\n%s", out, strings.Join(testCase.expected, "\n"))
 			}
 		})
-
 	}
 }

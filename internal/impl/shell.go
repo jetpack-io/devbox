@@ -5,6 +5,7 @@ package impl
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"io/fs"
@@ -109,11 +110,9 @@ func shellPath(devbox *Devbox) (path string, err error) {
 
 	var bashNixStorePath string // of the form /nix/store/{hash}-bash-{version}/
 
-	cmd := exec.Command(
-		"nix", "eval", "--raw",
+	cmd := nix.Command(context.TODO(), "eval", "--raw",
 		fmt.Sprintf("%s#bashInteractive", nix.FlakeNixpkgs(devbox.cfg.NixPkgsCommitHash())),
 	)
-	cmd.Args = append(cmd.Args, nix.ExperimentalFlags()...)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", errors.WithStack(err)
@@ -121,8 +120,7 @@ func shellPath(devbox *Devbox) (path string, err error) {
 	bashNixStorePath = string(out)
 
 	// install bashInteractive in nix/store without creating a symlink to local directory (--no-link)
-	cmd = exec.Command("nix", "build", bashNixStorePath, "--no-link")
-	cmd.Args = append(cmd.Args, nix.ExperimentalFlags()...)
+	cmd = nix.Command(context.TODO(), "build", bashNixStorePath, "--no-link")
 	err = cmd.Run()
 	if err != nil {
 		return "", errors.WithStack(err)

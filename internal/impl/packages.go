@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime/trace"
 	"strings"
@@ -239,7 +238,7 @@ func (d *Devbox) profilePath() (string, error) {
 		debug.Log("ERROR: resetProfileDirForFlakes error: %v\n", err)
 	}
 
-	return absPath, errors.WithStack(os.MkdirAll(filepath.Dir(absPath), 0755))
+	return absPath, errors.WithStack(os.MkdirAll(filepath.Dir(absPath), 0o755))
 }
 
 // syncPackagesToProfile ensures that all packages in devbox.json exist in the nix profile,
@@ -340,11 +339,10 @@ func (d *Devbox) removePackagesFromProfile(ctx context.Context, pkgs []string) e
 		}
 
 		// TODO: unify this with nix.ProfileRemove
-		cmd := exec.Command("nix", "profile", "remove",
+		cmd := nix.Command(ctx, "profile", "remove",
 			"--profile", profileDir,
 			fmt.Sprintf("%d", index),
 		)
-		cmd.Args = append(cmd.Args, nix.ExperimentalFlags()...)
 		cmd.Stdout = d.writer
 		cmd.Stderr = d.writer
 		err = cmd.Run()

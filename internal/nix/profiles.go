@@ -4,6 +4,7 @@
 package nix
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ import (
 )
 
 func ProfileList(writer io.Writer, profilePath string, useJSON bool) (string, error) {
-	cmd := command("profile", "list", "--profile", profilePath)
+	cmd := Command(context.TODO(), "profile", "list", "--profile", profilePath)
 	if useJSON {
 		cmd.Args = append(cmd.Args, "--json")
 	}
@@ -29,7 +30,6 @@ func ProfileList(writer io.Writer, profilePath string, useJSON bool) (string, er
 }
 
 func ProfileInstall(writer io.Writer, profilePath string, installable string) error {
-
 	if !IsInsecureAllowed() && PackageIsInsecure(installable) {
 		knownVulnerabilities := PackageKnownVulnerabilities(installable)
 		errString := fmt.Sprintf("Package %s is insecure. \n\n", installable)
@@ -40,7 +40,7 @@ func ProfileInstall(writer io.Writer, profilePath string, installable string) er
 		return usererr.New(errString)
 	}
 
-	cmd := command(
+	cmd := Command(context.TODO(),
 		"profile", "install",
 		"--profile", profilePath,
 		"--impure", // for NIXPKGS_ALLOW_UNFREE
@@ -63,8 +63,7 @@ func ProfileInstall(writer io.Writer, profilePath string, installable string) er
 }
 
 func ProfileRemove(profilePath string, indexes []string) error {
-
-	cmd := command(
+	cmd := Command(context.TODO(),
 		append([]string{
 			"profile", "remove",
 			"--profile", profilePath,

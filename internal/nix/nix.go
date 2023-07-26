@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 
 	"go.jetpack.io/devbox/internal/debug"
@@ -62,13 +61,7 @@ func (*Nix) PrintDevEnv(ctx context.Context, args *PrintDevEnvArgs) (*PrintDevEn
 	}
 
 	if len(data) == 0 {
-		cmd := exec.CommandContext(
-			ctx,
-			"nix", "print-dev-env",
-			args.FlakesFilePath,
-		)
-		cmd.Args = append(cmd.Args, ExperimentalFlags()...)
-		cmd.Args = append(cmd.Args, "--json")
+		cmd := Command(ctx, "print-dev-env", "--json", filepath.Dir(args.FlakesFilePath))
 		debug.Log("Running print-dev-env cmd: %s\n", cmd)
 		data, err = cmd.Output()
 		if insecure, insecureErr := isExitErrorInsecurePackage(err); insecure {
@@ -95,7 +88,7 @@ func savePrintDevEnvCache(path string, out PrintDevEnvOut) error {
 		return errors.WithStack(err)
 	}
 
-	_ = os.WriteFile(path, data, 0644)
+	_ = os.WriteFile(path, data, 0o644)
 	return nil
 }
 
@@ -105,17 +98,6 @@ func FlakeNixpkgs(commit string) string {
 	// Using nixpkgs/<commit> means:
 	// The nixpkgs entry in the flake registry, with its Git revision overridden to a specific value.
 	return "nixpkgs/" + commit
-}
-
-func ExperimentalFlags() []string {
-	options := []string{"nix-command", "flakes"}
-	if featureflag.RemoveNixpkgs.Enabled() {
-		options = append(options, "fetch-closure")
-	}
-	return []string{
-		"--extra-experimental-features", "ca-derivations",
-		"--option", "experimental-features", strings.Join(options, " "),
-	}
 }
 
 var cachedSystem string
@@ -131,10 +113,8 @@ func System() (string, error) {
 	}
 
 	if cachedSystem == "" {
-		cmd := exec.Command(
-			"nix", "eval", "--impure", "--raw", "--expr", "builtins.currentSystem",
-		)
-		cmd.Args = append(cmd.Args, ExperimentalFlags()...)
+		cmd := Command(context.TODO(), "eval", "--impure", "--raw",
+			"--expr", "builtins.currentSystem")
 		out, err := cmd.Output()
 		if err != nil {
 			return "", errors.WithStack(err)

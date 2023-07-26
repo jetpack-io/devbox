@@ -1,18 +1,20 @@
 package nix
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/pkg/errors"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/debug"
 )
 
-var ErrPackageNotFound = errors.New("package not found")
-var ErrPackageNotInstalled = errors.New("package not installed")
+var (
+	ErrPackageNotFound     = errors.New("package not found")
+	ErrPackageNotInstalled = errors.New("package not installed")
+)
 
 type Info struct {
 	// attribute key is different in flakes vs legacy so we should only use it
@@ -43,7 +45,6 @@ func parseSearchResults(data []byte) map[string]*Info {
 			PName:        result["pname"].(string),
 			Version:      result["version"].(string),
 		}
-
 	}
 	return infos
 }
@@ -87,8 +88,7 @@ func searchSystem(url string, system string) (map[string]*Info, error) {
 		_ = EnsureNixpkgsPrefetched(writer, hash)
 	}
 
-	cmd := exec.Command("nix", "search", "--json", url)
-	cmd.Args = append(cmd.Args, ExperimentalFlags()...)
+	cmd := Command(context.TODO(), "search", "--json", url)
 	if system != "" {
 		cmd.Args = append(cmd.Args, "--system", system)
 	}

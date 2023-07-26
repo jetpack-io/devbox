@@ -1,6 +1,7 @@
 package nix
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func StorePath(hash, name, version string) string {
 
 // ContentAddressedStorePath takes a store path and returns the content-addressed store path.
 func ContentAddressedStorePath(storePath string) (string, error) {
-	cmd := command("store", "make-content-addressed", storePath, "--json")
+	cmd := Command(context.TODO(), "store", "make-content-addressed", "--json", storePath)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", errors.WithStack(err)

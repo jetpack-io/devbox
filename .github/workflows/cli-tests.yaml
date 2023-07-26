@@ -31,6 +31,12 @@ permissions:
   contents: read
   pull-requests: read
 
+defaults:
+  run:
+    # Explicitly setting the shell to bash runs commands with
+    # `bash --noprofile --norc -eo pipefail` instead of `bash -e`.
+    shell: bash
+
 env:
   HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
   HOMEBREW_NO_ANALYTICS: 1
@@ -102,10 +108,10 @@ jobs:
             brew install dash zsh
           fi
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v1
+        uses: DeterminateSystems/nix-installer-action@v4
         with:
           logger: pretty
-          nix-build-user-count: 4
+          extra-conf: experimental-features = ca-derivations fetch-closure
       - name: Run tests
         env:
           # For devbox.json tests, we default to non-debug mode since the debug output is less useful than for unit testscripts.
@@ -115,6 +121,15 @@ jobs:
           # Used in `go test -timeout` flag. Needs a value that time.ParseDuration can parse.
           DEVBOX_GOLANG_TEST_TIMEOUT: "${{ (github.ref == 'refs/heads/main' || inputs.run-mac-tests) && '35m' || '20m' }}"
         run: |
+          echo "::group::Nix version"
+          nix --version
+          echo "::endgroup::"
+          echo "::group::Contents of /etc/nix/nix.conf"
+          cat /etc/nix/nix.conf || true
+          echo "::endgroup::"
+          echo "::group::Resolved Nix config"
+          nix show-config
+          echo "::endgroup::"
           go test -v -timeout $DEVBOX_GOLANG_TEST_TIMEOUT ./...
 
   auto-nix-install: # ensure Devbox installs nix and works properly after installation.
@@ -141,12 +156,14 @@ jobs:
           devbox run echo "Installing packages..."
       - name: Test removing package
         run: devbox rm go
-  
-  test-with-old-nix-version:
+
+  # Run a sanity test to make sure Devbox can install and remove packages with
+  # the last 3 Nix releases.
+  test-nix-versions:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        version: [2.15.1]
+        version: [2.15.1, 2.16.1, 2.17.0]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -155,15 +172,23 @@ jobs:
           go-version-file: ./go.mod
       - name: Build devbox
         run: go install ./cmd/devbox
-      - name: Install nix
-        run: sh <(curl -L https://releases.nixos.org/nix/nix-${{ matrix.version }}/install) --daemon
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v4
+        with:
+          logger: pretty
+          extra-conf: experimental-features = ca-derivations fetch-closure
+          nix-package-url: https://releases.nixos.org/nix/nix-${{ matrix.version }}/nix-${{ matrix.version }}-${{ runner.arch == 'X64' && 'x86_64' || 'aarch64' }}-${{ runner.os == 'macOS' && 'darwin' || 'linux' }}.tar.xz
       - name: Install devbox packages
         run: |
-          # Setup github authentication to ensure Github's rate limits are not hit.
-          # If this works, we can consider refactoring this into a reusable github action helper.
-          mkdir -p ~/.config/nix
-          echo "access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}" > ~/.config/nix/nix.conf
-
-          devbox run echo "Installing packages..."
-      - name: Test removing package
-        run: devbox rm go
+          echo "::group::Nix version"
+          nix --version
+          echo "::endgroup::"
+          echo "::group::Contents of /etc/nix/nix.conf"
+          cat /etc/nix/nix.conf || true
+          echo "::endgroup::"
+          echo "::group::Resolved Nix config"
+          nix show-config
+          echo "::endgroup::"
+          devbox install
+          devbox run -- echo "Hello from devbox!"
+          devbox rm go

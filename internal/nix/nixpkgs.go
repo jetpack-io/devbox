@@ -4,12 +4,12 @@
 package nix
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -38,11 +38,7 @@ func EnsureNixpkgsPrefetched(w io.Writer, commit string) error {
 	}
 
 	fmt.Fprintf(w, "Ensuring nixpkgs registry is downloaded.\n")
-	cmd := exec.Command(
-		"nix", "flake", "prefetch",
-		FlakeNixpkgs(commit),
-	)
-	cmd.Args = append(cmd.Args, ExperimentalFlags()...)
+	cmd := Command(context.TODO(), "flake", "prefetch", FlakeNixpkgs(commit))
 	cmd.Stdout = w
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Run(); err != nil {
@@ -73,10 +69,7 @@ func nixpkgsCommitFileContents() (map[string]string, error) {
 
 func saveToNixpkgsCommitFile(commit string, commitToLocation map[string]string) error {
 	// Make a query to get the /nix/store path for this commit hash.
-	cmd := exec.Command("nix", "flake", "prefetch", "--json",
-		FlakeNixpkgs(commit),
-	)
-	cmd.Args = append(cmd.Args, ExperimentalFlags()...)
+	cmd := Command(context.TODO(), "flake", "prefetch", "--json", FlakeNixpkgs(commit))
 	out, err := cmd.Output()
 	if err != nil {
 		return errors.WithStack(err)
@@ -92,7 +85,7 @@ func saveToNixpkgsCommitFile(commit string, commitToLocation map[string]string) 
 
 	// Ensure the nixpkgs commit file path exists so we can write an update to it
 	path := nixpkgsCommitFilePath()
-	err = os.MkdirAll(filepath.Dir(path), 0755)
+	err = os.MkdirAll(filepath.Dir(path), 0o755)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return errors.WithStack(err)
 	}
@@ -104,7 +97,7 @@ func saveToNixpkgsCommitFile(commit string, commitToLocation map[string]string) 
 		return errors.WithStack(err)
 	}
 
-	return errors.WithStack(os.WriteFile(path, serialized, 0644))
+	return errors.WithStack(os.WriteFile(path, serialized, 0o644))
 }
 
 func nixpkgsCommitFilePath() string {

@@ -1,13 +1,22 @@
 package nix
 
 import (
+	"context"
+	"os"
 	"os/exec"
+	"time"
+
+	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 )
 
-func command(args ...string) *exec.Cmd {
-
-	cmd := exec.Command("nix", args...)
-	cmd.Args = append(cmd.Args, ExperimentalFlags()...)
+func Command(ctx context.Context, arg ...string) *exec.Cmd {
+	exp := "ca-derivations flakes nix-command"
+	if featureflag.RemoveNixpkgs.Enabled() {
+		exp += " fetch-closure"
+	}
+	cmd := exec.CommandContext(ctx, "nix", append([]string{"--extra-experimental-features", exp}, arg...)...)
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = 5 * time.Second
 	return cmd
 }
 
