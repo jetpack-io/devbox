@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/cuecfg"
 	"go.jetpack.io/devbox/internal/envir"
@@ -23,8 +24,7 @@ type Authenticator struct {
 	Audience string
 }
 
-// NewAuthenticator creates an authenticator that uses the auth0 production
-// tenancy.
+// NewAuthenticator creates an authenticator that uses the auth0 production tenancy.
 func NewAuthenticator() *Authenticator {
 	return &Authenticator{
 		ClientID: envir.GetValueOrDefault(

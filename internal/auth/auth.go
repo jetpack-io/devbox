@@ -16,13 +16,14 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/pkg/errors"
+
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/xdg"
 )
 
 var errExpiredOrInvalidRefreshToken = errors.New("refresh token is expired or invalid")
 
-const additionalSleepOnSlowDown = 1
+const additionalSleepOnSlowDown = time.Second
 
 type codeResponse struct {
 	DeviceCode              string `json:"device_code"`
@@ -30,7 +31,7 @@ type codeResponse struct {
 	VerificationURI         string `json:"verification_uri"`
 	VerificationURIComplete string `json:"verification_uri_complete"`
 	ExpiresIn               int    `json:"expires_in"`
-	Interval                int    `json:"interval"`
+	Interval                int    `json:"interval"` // in seconds
 }
 
 type tokenSet struct {
@@ -62,8 +63,7 @@ func (a *Authenticator) showVerificationURL(url string, w io.Writer) {
 		"Please go to this URL to confirm this code and login: %s\n\n", url)
 }
 
-// requestDeviceCode requests a device code that the user can use to
-// authorize the device.
+// requestDeviceCode requests a device code that the user can use to authorize the device.
 func (a *Authenticator) requestDeviceCode() (*codeResponse, error) {
 	reqURL := fmt.Sprintf("https://%s/oauth/device/code", a.Domain)
 	payload := strings.NewReader(fmt.Sprintf(
@@ -90,8 +90,8 @@ func (a *Authenticator) requestDeviceCode() (*codeResponse, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to send Request")
 	}
-
 	defer res.Body.Close()
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read response body")
@@ -110,13 +110,9 @@ func (a *Authenticator) requestDeviceCode() (*codeResponse, error) {
 }
 
 // requestTokens polls the Auth0 API for tokens.
-func (a *Authenticator) requestTokens(
-	ctx context.Context,
-	codeResponse *codeResponse,
-) (*tokenSet, error) {
-
-	timeToSleep := codeResponse.Interval
-	ticker := time.NewTicker(time.Duration(timeToSleep) * time.Second)
+func (a *Authenticator) requestTokens(ctx context.Context, codeResponse *codeResponse) (*tokenSet, error) {
+	timeToSleep := time.Duration(codeResponse.Interval) * time.Second
+	ticker := time.NewTicker(timeToSleep)
 	defer ticker.Stop()
 
 	// numTries is a counter to guard against infinite looping.
@@ -156,17 +152,14 @@ func (a *Authenticator) requestTokens(
 				return nil, errors.WithStack(err)
 			}
 			timeToSleep += moreSleep
-			ticker.Reset(time.Duration(timeToSleep) * time.Second)
+			ticker.Reset(timeToSleep)
 		}
 	}
 
 	return nil, usererr.New("max number of tries exceeded")
 }
 
-func (a *Authenticator) doRefreshToken(
-	refreshToken string,
-) (*tokenSet, error) {
-
+func (a *Authenticator) doRefreshToken(refreshToken string) (*tokenSet, error) {
 	reqURL := fmt.Sprintf("https://%s/oauth/token", a.Domain)
 
 	payload := fmt.Sprintf(
@@ -230,9 +223,7 @@ func (a *Authenticator) doRefreshToken(
 	)
 }
 
-func (a *Authenticator) tryRequestToken(
-	codeResponse *codeResponse,
-) (*http.Response, error) {
+func (a *Authenticator) tryRequestToken(codeResponse *codeResponse) (*http.Response, error) {
 	reqURL := fmt.Sprintf("https://%s/oauth/token", a.Domain)
 
 	grantType := "urn:ietf:params:oauth:grant-type:device_code"
@@ -254,37 +245,29 @@ func (a *Authenticator) tryRequestToken(
 }
 
 // handleFailure handles the failure scenarios for requestTokens.
-func handleFailure(body []byte, code int) (int, error) {
+func handleFailure(body []byte, code int) (time.Duration, error) {
 	tokenErrorBody := requestTokenError{}
 	if err := json.Unmarshal(body, &tokenErrorBody); err != nil {
 		return 0, errors.WithStack(err)
 	}
 
-	if code == http.StatusTooManyRequests {
+	switch code {
+	case http.StatusTooManyRequests: // 429
 		if tokenErrorBody.Error != "slow_down" {
-			return 0, errors.Errorf(
-				"got status code: %d, response body: %s",
-				code,
-				body,
-			)
+			return 0, errors.Errorf("got status code: %d, response body: %s", code, body)
 		}
 
 		return additionalSleepOnSlowDown, nil
-
-	} else if code == http.StatusForbidden {
-
+	case http.StatusForbidden: // 403
 		// this error is received when waiting for user to take action
 		// when they are logging in via browser. Continue polling.
 		if tokenErrorBody.Error != "authorization_pending" {
-			return 0, errors.Errorf(
-				"got status code: %d, response body: %s",
-				code,
-				body,
-			)
+			return 0, errors.Errorf("got status code: %d, response body: %s", code, body)
 		}
 
 		return 0, nil // No slowdown, just keep trying
 	}
+
 	// The user has not authorized the device quickly enough, so
 	// the `device_code` has expired. Notify the user that the
 	// flow has expired and prompt them to re-initiate the flow.
@@ -292,8 +275,7 @@ func handleFailure(body []byte, code int) (int, error) {
 	// the dreaded "invalid_grant" will be returned and device
 	// must stop polling.
 	if tokenErrorBody.Error == "expired_token" || tokenErrorBody.Error == "invalid_grant" {
-		return 0, usererr.New(
-			"The device code has expired. Please try `devbox auth login` again.")
+		return 0, usererr.New("The device code has expired. Please try `devbox auth login` again.")
 	}
 
 	// "access_denied" can be received for:
