@@ -4,6 +4,7 @@
 package golang
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -13,14 +14,7 @@ import (
 	"go.jetpack.io/devbox/internal/initrec/recommenders"
 )
 
-var versionMap = map[string]string{
-	// Map go versions to the corresponding nixpkgs:
-	"1.19": "go_1_19",
-	"1.18": "go",
-	"1.17": "go_1_17",
-}
-
-const defaultPkg = "go_1_19" // Default to "latest" for cases where we can't determine a version.
+const defaultPkg = "go@1.20" // Default to "latest" for cases where we can't determine a version.
 
 type Recommender struct {
 	SrcDir string
@@ -42,12 +36,9 @@ func (r *Recommender) Packages() []string {
 func getGoPackage(srcDir string) string {
 	goModPath := filepath.Join(srcDir, "go.mod")
 	goVersion := parseGoVersion(goModPath)
-	v, ok := versionMap[goVersion]
-	if ok {
-		return v
+	if goVersion != "" {
+		return fmt.Sprintf("go@%s", goVersion)
 	}
-	// Should we be throwing an error instead, if we don't have a nix package
-	// for the specified version of go?
 	return defaultPkg
 }
 
