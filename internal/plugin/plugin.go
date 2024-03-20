@@ -222,7 +222,8 @@ func (m *Manager) shouldCreateFile(
 	}
 
 	// Hidden .devbox files are always replaceable, so ok to recreate
-	if strings.Contains(filePath, devboxHiddenDirName) {
+	devboxHiddenDir := filepath.FromSlash("/.devbox/")
+	if strings.Contains(filePath, devboxHiddenDir) {
 		return true
 	}
 	_, err := os.Stat(filePath)
