@@ -1,0 +1,12 @@
+{
+  "$schema":  "https://raw.githubusercontent.com/jetpack-io/devbox/0.10.1/.schema/devbox.schema.json",
+  "packages": ["bun@latest"],
+  "shell": {
+    "init_hook": [],
+    "scripts": {
+      "build": "bun build ./index.ts",
+      "test": "bun test",
+      "dev": "bun --watch run index.ts"
+    }
+  }
+}

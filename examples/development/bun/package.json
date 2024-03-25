@@ -1,0 +1,14 @@
+{
+  "name": "bun",
+  "module": "index.tx",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "figlet": "^1.7.0"
+  }
+}

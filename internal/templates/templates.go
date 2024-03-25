@@ -19,6 +19,7 @@ var popularTemplates = []string{
 var templates = map[string]string{
 	"apache":          "examples/servers/apache/",
 	"argo":            "examples/cloud_development/argo-workflows/",
+	"bun":             "examples/development/bun/",
 	"caddy":           "examples/servers/caddy/",
 	"django":          "examples/stacks/django/",
 	"dotnet":          "examples/development/csharp/hello-world/",
