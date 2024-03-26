@@ -6,14 +6,17 @@ package midcobra
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
-
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
+	"go.jetpack.io/devbox/internal/cmdutil"
 	"go.jetpack.io/devbox/internal/debug"
 	"go.jetpack.io/devbox/internal/ux"
 )
+
+const DevboxEntrypoint = "DEVBOX_ENTRYPOINT"
 
 type Executable interface {
 	AddMiddleware(mids ...Middleware)
@@ -49,6 +52,11 @@ func (ex *midcobraExecutable) Execute(ctx context.Context, args []string) int {
 	ex.cmd.SetContext(ctx)
 	_ = ex.cmd.ParseFlags(args)
 
+	if subcmd, _, _ := cmdutil.GetSubcommand(ex.cmd, args); subcmd != nil {
+		// Add the DEVBOX_ENTRYPOINT environment variable
+		_ = os.Setenv(DevboxEntrypoint, subcmd.Name())
+	}
+
 	// Run the 'pre' hooks
 	for _, m := range ex.middlewares {
 		m.preRun(ex.cmd, args)
@@ -67,6 +75,9 @@ func (ex *midcobraExecutable) Execute(ctx context.Context, args []string) int {
 	for i := len(ex.middlewares) - 1; i >= 0; i-- {
 		ex.middlewares[i].postRun(ex.cmd, args, err)
 	}
+
+	// Remove the DEVBOX_ENTRYPOINT environment variable
+	_ = os.Unsetenv(DevboxEntrypoint)
 
 	if err != nil {
 		// If the error is from the exec call, return the exit code of the exec call.

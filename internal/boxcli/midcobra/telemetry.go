@@ -6,13 +6,12 @@ package midcobra
 import (
 	"os"
 	"runtime/trace"
-	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
+	"go.jetpack.io/devbox/internal/cmdutil"
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 	"go.jetpack.io/devbox/internal/envir"
@@ -53,7 +52,7 @@ func (m *telemetryMiddleware) postRun(cmd *cobra.Command, args []string, runErr 
 		CloudCache:   os.Getenv(envir.DevboxCache),
 	}
 
-	subcmd, flags, err := getSubcommand(cmd, args)
+	subcmd, flags, err := cmdutil.GetSubcommand(cmd, args)
 	if err != nil {
 		// Ignore invalid commands/flags.
 		return
@@ -71,20 +70,6 @@ func (m *telemetryMiddleware) postRun(cmd *cobra.Command, args []string, runErr 
 		return
 	}
 	telemetry.Event(telemetry.EventCommandSuccess, meta)
-}
-
-func getSubcommand(cmd *cobra.Command, args []string) (subcmd *cobra.Command, flags []string, err error) {
-	if cmd.TraverseChildren {
-		subcmd, _, err = cmd.Traverse(args)
-	} else {
-		subcmd, _, err = cmd.Find(args)
-	}
-
-	subcmd.Flags().Visit(func(f *pflag.Flag) {
-		flags = append(flags, "--"+f.Name)
-	})
-	sort.Strings(flags)
-	return subcmd, flags, err
 }
 
 func getPackagesAndCommitHash(c *cobra.Command) ([]string, string) {

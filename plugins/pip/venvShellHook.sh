@@ -5,4 +5,6 @@ if ! [ -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 
-echo "You can activate the virtual environment by running 'source \$VENV_DIR/bin/activate'" >&2
+if [ "${DEVBOX_ENTRYPOINT:-}" != "run" ]; then
+    echo "You can activate the virtual environment by running 'source \$VENV_DIR/bin/activate'" >&2
+fi
