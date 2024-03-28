@@ -4,13 +4,18 @@
 package boxcli
 
 import (
+	"encoding/base64"
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/scrypt"
 
 	"go.jetpack.io/devbox/internal/cloud"
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 	"go.jetpack.io/devbox/internal/devbox/docgen"
+	"go.jetpack.io/typeid"
 )
 
 type generateCmdFlags struct {
@@ -44,6 +49,7 @@ func generateCmd() *cobra.Command {
 	command.AddCommand(direnvCmd())
 	command.AddCommand(genReadmeCmd())
 	command.AddCommand(sshConfigCmd())
+	command.AddCommand(hashCmd())
 	flags.config.register(command)
 
 	return command
@@ -180,6 +186,20 @@ func genReadmeCmd() *cobra.Command {
 	return command
 }
 
+func hashCmd() *cobra.Command {
+	flags := &generateCmdFlags{}
+	command := &cobra.Command{
+		Use:   "hash",
+		Short: "Generate token",
+		Long:  "Generate token",
+		Args:  cobra.MaximumNArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runHashCmd(cmd, flags)
+		},
+	}
+	return command
+}
+
 func runGenerateCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
 	// Check the directory exists.
 	box, err := devbox.Open(&devopt.Opts{
@@ -222,4 +242,18 @@ func runGenerateDirenvCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
 
 	return box.GenerateEnvrcFile(
 		cmd.Context(), flags.force, devopt.EnvFlags(flags.envFlag))
+}
+
+func runHashCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
+	token, err := typeid.WithPrefix("pat")
+	if err != nil {
+		return err
+	}
+	fmt.Println(token.String())
+	hash, err := scrypt.Key([]byte(token.String()), []byte(token.String()), 1<<15, 8, 1, 32)
+	if err != nil {
+		return err
+	}
+	fmt.Println(base64.StdEncoding.EncodeToString(hash))
+	return nil
 }
