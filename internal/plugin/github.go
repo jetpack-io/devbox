@@ -2,9 +2,11 @@ package plugin
 
 import (
 	"cmp"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 
@@ -60,12 +62,13 @@ func (p *githubPlugin) Hash() string {
 }
 
 func (p *githubPlugin) FileContent(subpath string) ([]byte, error) {
-	contentURL, err := p.url(subpath)
+	req, err := p.request(subpath)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := http.Get(contentURL)
+	client := &http.Client{}
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +78,7 @@ func (p *githubPlugin) FileContent(subpath string) ([]byte, error) {
 			"failed to get plugin %s @ %s (Status code %d). \nPlease make "+
 				"sure a plugin.json file exists in plugin directory.",
 			p.LockfileKey(),
-			contentURL,
+			req.URL.String(),
 			res.StatusCode,
 		)
 	}
@@ -93,6 +96,28 @@ func (p *githubPlugin) url(subpath string) (string, error) {
 		p.ref.Dir,
 		subpath,
 	)
+}
+
+func (p *githubPlugin) request(subpath string) (*http.Request, error) {
+	contentURL, err := p.url(subpath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, contentURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add github token to request if available
+	ghToken := os.Getenv("GITHUB_TOKEN")
+
+	if ghToken != "" {
+		authValue := fmt.Sprintf("token %s", ghToken)
+		req.Header.Add("Authorization", authValue)
+	}
+
+	return req, nil
 }
 
 func (p *githubPlugin) LockfileKey() string {

@@ -102,3 +102,32 @@ func newGithubPluginForTest(include string) (*githubPlugin, error) {
 	)
 	return plugin, nil
 }
+
+func TestGithubPluginAuth(t *testing.T) {
+	githubPlugin := githubPlugin{
+		ref: flake.Ref{
+			Type:  "github",
+			Owner: "jetpack-io",
+			Repo:  "devbox-plugins",
+		},
+		name: "jetpack-io.devbox-plugins",
+	}
+
+	expectedURL := "https://raw.githubusercontent.com/jetpack-io/devbox-plugins/master/test"
+
+	t.Run("generate request for public Github repository", func(t *testing.T) {
+		actual, err := githubPlugin.request("test")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURL, actual.URL.String())
+		assert.Equal(t, "", actual.Header.Get("Authorization"))
+	})
+
+	t.Run("generate request for private Github repository", func(t *testing.T) {
+		t.Setenv("GITHUB_TOKEN", "gh_abcd")
+
+		actual, err := githubPlugin.request("test")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedURL, actual.URL.String())
+		assert.Equal(t, "token gh_abcd", actual.Header.Get("Authorization"))
+	})
+}
