@@ -15,6 +15,10 @@ const config = {
     onBrokenMarkdownLinks: 'warn',
     favicon: 'img/favicon.ico',
     trailingSlash: true,
+    customFields: {
+        companyName: process.env.COMPANY_NAME || 'Jetpack',
+        platformName: process.env.PLATFORM_NAME || 'Jetpack Cloud',
+    },
 
     // GitHub pages deployment config.
     // If you aren't using GitHub pages, you don't need these.
