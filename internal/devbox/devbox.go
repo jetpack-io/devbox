@@ -27,6 +27,7 @@ import (
 	"go.jetpack.io/devbox/internal/cachehash"
 	"go.jetpack.io/devbox/internal/devbox/envpath"
 	"go.jetpack.io/devbox/internal/devbox/generate"
+	"go.jetpack.io/devbox/internal/devbox/providers"
 	"go.jetpack.io/devbox/internal/devpkg"
 	"go.jetpack.io/devbox/internal/devpkg/pkgtype"
 	"go.jetpack.io/devbox/internal/searcher"
@@ -65,6 +66,7 @@ type Devbox struct {
 	lockfile                 *lock.File
 	nix                      nix.Nixer
 	projectDir               string
+	providers                providers.Providers
 	pluginManager            *plugin.Manager
 	preservePathStack        bool
 	pure                     bool

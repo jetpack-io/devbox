@@ -17,7 +17,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"go.jetpack.io/devbox/internal/devbox/bincache"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 	"go.jetpack.io/devbox/internal/devconfig"
 	"go.jetpack.io/devbox/internal/devpkg"
@@ -446,7 +445,7 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 			flags = append(flags, "--refresh")
 		}
 
-		extraSubstituter, err := bincache.ExtraSubstituter()
+		nixCacheConfig, err := d.providers.NixCache.Config(ctx)
 		if err != nil {
 			return err
 		}
@@ -454,9 +453,10 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 		for _, installable := range installables {
 			args := &nix.BuildArgs{
 				AllowInsecure:    pkg.HasAllowInsecure(),
+				Env:              nixCacheConfig.CredentialsEnvVars(),
+				ExtraSubstituter: nixCacheConfig.URI,
 				Flags:            flags,
 				Writer:           d.stderr,
-				ExtraSubstituter: extraSubstituter,
 			}
 			err = nix.Build(ctx, args, installable)
 			if err != nil {

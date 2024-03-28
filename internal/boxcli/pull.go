@@ -15,6 +15,7 @@ import (
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
+	"go.jetpack.io/devbox/internal/devbox/providers/identity"
 	"go.jetpack.io/devbox/internal/goutil"
 	"go.jetpack.io/devbox/internal/pullbox/s3"
 	"go.jetpack.io/pkg/auth"
@@ -64,7 +65,7 @@ func pullCmdFunc(cmd *cobra.Command, url string, flags *pullCmdFlags) error {
 	}
 
 	var creds devopt.Credentials
-	t, err := genSession(cmd.Context())
+	t, err := identity.Get().GenSession(cmd.Context())
 	if err != nil && !errors.Is(err, auth.ErrNotLoggedIn) {
 		return errors.WithStack(err)
 	} else if t != nil && err == nil {

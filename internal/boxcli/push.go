@@ -10,6 +10,7 @@ import (
 
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
+	"go.jetpack.io/devbox/internal/devbox/providers/identity"
 	"go.jetpack.io/devbox/internal/goutil"
 )
 
@@ -43,7 +44,7 @@ func pushCmdFunc(cmd *cobra.Command, url string, flags pushCmdFlags) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	t, err := genSession(cmd.Context())
+	t, err := identity.Get().GenSession(cmd.Context())
 	var creds devopt.Credentials
 	if err != nil && !errors.Is(err, auth.ErrNotLoggedIn) {
 		return errors.WithStack(err)
