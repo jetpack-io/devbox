@@ -10,6 +10,8 @@ Generate a Dockerfile that replicates devbox shell. Can be used to run devbox sh
 devbox generate dockerfile [flags]
 ```
 
+The generated Dockerfile only copies `devbox.json` and `devbox.lock` files into the container. Users need to modify this file to include copying their project files as well.
+
 ## Options
 
 <!-- Markdown Table of Options -->

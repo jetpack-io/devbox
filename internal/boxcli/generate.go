@@ -4,6 +4,8 @@
 package boxcli
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -194,13 +196,37 @@ func runGenerateCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
 		Force:    flags.force,
 		RootUser: flags.rootUser,
 	}
+	quiet, err := cmd.Root().PersistentFlags().GetBool("quiet")
+	if err != nil {
+		return err
+	}
 	switch cmd.Use {
 	case "debug":
 		return box.Generate(cmd.Context())
 	case "devcontainer":
-		return box.GenerateDevcontainer(cmd.Context(), generateOpts)
+		err = box.GenerateDevcontainer(cmd.Context(), generateOpts)
+		if err != nil {
+			return err
+		}
+		if !quiet {
+			fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"Finished generating devcontainer files. \n"+
+					"Make sure to modify the generated Dockerfile to include your project files.\n",
+			)
+		}
 	case "dockerfile":
-		return box.GenerateDockerfile(cmd.Context(), generateOpts)
+		err = box.GenerateDockerfile(cmd.Context(), generateOpts)
+		if err != nil {
+			return err
+		}
+		if !quiet {
+			fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"Finished generating Dockerfile. \n"+
+					"Make sure to modify it to include your project files.\n",
+			)
+		}
 	}
 	return nil
 }

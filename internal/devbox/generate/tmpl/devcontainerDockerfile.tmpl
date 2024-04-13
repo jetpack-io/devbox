@@ -14,7 +14,7 @@ COPY --chown=${DEVBOX_USER}:${DEVBOX_USER} devbox.lock devbox.lock
 COPY devbox.json devbox.json
 COPY devbox.lock devbox.lock
 {{- end}}
-
+# Copy the rest of your project files and directories here:
 {{if len .LocalFlakeDirs}}
 # Step 6: Copying local flakes directories
 {{- end}}
