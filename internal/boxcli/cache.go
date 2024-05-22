@@ -7,18 +7,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/user"
+	"slices"
 
 	"github.com/MakeNowJust/heredoc/v2"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 	"go.jetpack.io/devbox/internal/devbox/providers/nixcache"
+	nixv1alpha1 "go.jetpack.io/pkg/api/gen/priv/nix/v1alpha1"
 )
 
 type cacheFlags struct {
 	pathFlag
 	to string
+}
+
+type credentialsFlags struct {
+	format string
 }
 
 func cacheCmd() *cobra.Command {
@@ -82,7 +89,7 @@ func cacheConfigureCmd() *cobra.Command {
 				u, _ := user.Current()
 				username = u.Username
 			}
-			return nixcache.Get().Configure(cmd.Context(), username)
+			return nixcache.Get().ConfigureReprompt(cmd.Context(), username)
 		},
 	}
 	cmd.Flags().StringVar(&username, "user", "", "")
@@ -90,7 +97,8 @@ func cacheConfigureCmd() *cobra.Command {
 }
 
 func cacheCredentialsCmd() *cobra.Command {
-	return &cobra.Command{
+	flags := credentialsFlags{}
+	cmd := &cobra.Command{
 		Use:    "credentials",
 		Short:  "Output S3 cache credentials",
 		Hidden: true,
@@ -100,6 +108,14 @@ func cacheCredentialsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			if flags.format == "sh" {
+				fmt.Printf("export AWS_ACCESS_KEY_ID=%q\n", creds.AccessKeyID)
+				fmt.Printf("export AWS_SECRET_ACCESS_KEY=%q\n", creds.SecretAccessKey)
+				fmt.Printf("export AWS_SESSION_TOKEN=%q\n", creds.SessionToken)
+				return nil
+			}
+
 			out, err := json.Marshal(creds)
 			if err != nil {
 				return err
@@ -108,6 +124,8 @@ func cacheCredentialsCmd() *cobra.Command {
 			return err
 		},
 	}
+	cmd.Flags().StringVar(&flags.format, "format", "json", "Output format, either json or sh")
+	return cmd
 }
 
 func cacheInfoCmd() *cobra.Command {
@@ -118,16 +136,26 @@ func cacheInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// TODO(gcurtis): We can also output info about the daemon config status
 			// here
-			uri, err := nixcache.Get().URI(cmd.Context())
+			caches, err := nixcache.Get().Caches(cmd.Context())
 			if err != nil {
 				return err
 			}
-			if uri == "" {
+			if len(caches) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "No cache configured")
-				return nil
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Cache URI:", uri)
-			return err
+			for _, cache := range caches {
+				isReadOnly := !slices.Contains(
+					cache.GetPermissions(),
+					nixv1alpha1.Permission_PERMISSION_WRITE,
+				)
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"* %s %s\n",
+					cache.GetUri(),
+					lo.Ternary(isReadOnly, "(read-only)", ""),
+				)
+			}
+			return nil
 		},
 	}
 }

@@ -9,12 +9,15 @@ import (
 	"math"
 	"strings"
 
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/searcher"
 	"go.jetpack.io/devbox/internal/ux"
 )
+
+const trimmedVersionsLength = 10
 
 type searchCmdFlags struct {
 	showAll bool
@@ -81,7 +84,7 @@ func printSearchResults(
 
 	resultsAreTrimmed := false
 	pkgs := results.Packages
-	if !showAll && len(pkgs) > 10 {
+	if !showAll && len(pkgs) > trimmedVersionsLength {
 		resultsAreTrimmed = true
 		pkgs = results.Packages[:int(math.Min(10, float64(len(results.Packages))))]
 	}
@@ -89,7 +92,7 @@ func printSearchResults(
 	for _, pkg := range pkgs {
 		nonEmptyVersions := []string{}
 		for i, v := range pkg.Versions {
-			if !showAll && i >= 10 {
+			if !showAll && i >= trimmedVersionsLength {
 				resultsAreTrimmed = true
 				break
 			}
@@ -100,7 +103,8 @@ func printSearchResults(
 
 		versionString := ""
 		if len(nonEmptyVersions) > 0 {
-			versionString = fmt.Sprintf(" (%s)", strings.Join(nonEmptyVersions, ", "))
+			ellipses := lo.Ternary(resultsAreTrimmed && pkg.NumVersions > trimmedVersionsLength, " ...", "")
+			versionString = fmt.Sprintf(" (%s%s)", strings.Join(nonEmptyVersions, ", "), ellipses)
 		}
 		fmt.Fprintf(w, "* %s %s\n", pkg.Name, versionString)
 	}

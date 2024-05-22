@@ -20,10 +20,11 @@ type shellEnvCmdFlags struct {
 	noRefreshAlias    bool
 	preservePathStack bool
 	pure              bool
+	recomputeEnv      bool
 	runInitHook       bool
 }
 
-func shellEnvCmd(recomputeEnvIfNeeded *bool) *cobra.Command {
+func shellEnvCmd() *cobra.Command {
 	flags := shellEnvCmdFlags{}
 	command := &cobra.Command{
 		Use:     "shellenv",
@@ -31,7 +32,7 @@ func shellEnvCmd(recomputeEnvIfNeeded *bool) *cobra.Command {
 		Args:    cobra.ExactArgs(0),
 		PreRunE: ensureNixInstalled,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			s, err := shellEnvFunc(cmd, flags, *recomputeEnvIfNeeded)
+			s, err := shellEnvFunc(cmd, flags)
 			if err != nil {
 				return err
 			}
@@ -61,6 +62,12 @@ func shellEnvCmd(recomputeEnvIfNeeded *bool) *cobra.Command {
 			"Use this flag to disable this behavior.")
 	_ = command.Flags().MarkHidden("no-refresh-alias")
 
+	// Note, `devbox global shellenv` will override the default value to be false
+	command.Flags().BoolVarP(
+		&flags.recomputeEnv, "recompute", "r", true,
+		"Recompute environment if needed",
+	)
+
 	flags.config.register(command)
 	flags.envFlag.register(command)
 
@@ -70,7 +77,6 @@ func shellEnvCmd(recomputeEnvIfNeeded *bool) *cobra.Command {
 func shellEnvFunc(
 	cmd *cobra.Command,
 	flags shellEnvCmdFlags,
-	recomputeEnvIfNeeded bool,
 ) (string, error) {
 	env, err := flags.Env(flags.config.path)
 	if err != nil {
@@ -95,7 +101,7 @@ func shellEnvFunc(
 	}
 
 	envStr, err := box.EnvExports(cmd.Context(), devopt.EnvExportsOpts{
-		DontRecomputeEnvironment: !recomputeEnvIfNeeded,
+		DontRecomputeEnvironment: !flags.recomputeEnv,
 		NoRefreshAlias:           flags.noRefreshAlias,
 		RunHooks:                 flags.runInitHook,
 	})

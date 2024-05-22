@@ -1,0 +1,28 @@
+FROM jetpackio/devbox:latest
+
+WORKDIR /code
+USER root:root
+RUN mkdir -p /code && chown ${DEVBOX_USER}:${DEVBOX_USER} /code
+USER ${DEVBOX_USER}:${DEVBOX_USER}
+
+{{- /*
+Ideally, we first copy over devbox.json and devbox.lock and run `devbox install` 
+to create a cache layer for the dependencies. This is complicated because
+devbox.json may include local dependencies (flakes and plugins). We could try
+to copy those in (the way the dev Dockerfile does) but that's brittle because
+those dependencies may also pull in other local dependencies and so on. Another
+sulution would be to add a new flag `devbox install --skip-errors` that would 
+just try to install what it can, and ignore the rest.
+
+A hack to make this simpler is to install from the lockfile instead of the json.
+*/}}
+
+COPY --chown=${DEVBOX_USER}:${DEVBOX_USER} . .
+
+RUN devbox install
+
+RUN {{ .DevboxRunInstall }}
+
+RUN {{ .DevboxRunBuild }}
+
+CMD [{{ .Cmd }}]

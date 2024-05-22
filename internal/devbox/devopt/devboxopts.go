@@ -20,6 +20,7 @@ type Opts struct {
 }
 
 type GenerateOpts struct {
+	ForType  string
 	Force    bool
 	RootUser bool
 }

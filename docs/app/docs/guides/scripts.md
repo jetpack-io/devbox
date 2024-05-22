@@ -81,7 +81,7 @@ devbox run --env-file .env.devbox echo $MY_VAR
 
 ## Tips on using Scripts
 
-1. Since `init_hook` runs everytime you start your shell, you should use primarily use it for setting environment variables and aliases. For longer running tasks like database setup, you can create and run a Devbox script
+1. Since `init_hook` runs every time you start your shell, you should primarily use it for setting environment variables and aliases. For longer running tasks like database setup, you can create and run a Devbox script
 2. You can use Devbox scripts to start and manage long running background processes and daemons.
    1. For example -- If you are working on a LAMP stack project, you can use scripts to start MySQL and Apache in separate shells and monitor their logs. Once you are done developing, you can use CTRL-C to exit the processes and shells
 3. If a script feels too long to put it directly in `devbox.json`, you can save it as a shell script in your project, and then invoke it in your `devbox scripts`.

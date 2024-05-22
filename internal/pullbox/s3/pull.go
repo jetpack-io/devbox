@@ -36,7 +36,7 @@ func PullToTmp(
 
 	ux.Finfo(
 		os.Stderr,
-		"Logged in as %s, pulling from jetpack cloud (profile: %s)\n",
+		"Logged in as %s, pulling from jetify cloud (profile: %s)\n",
 		creds.Email,
 		profile,
 	)

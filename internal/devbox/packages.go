@@ -14,6 +14,7 @@ import (
 	"runtime/trace"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/pkg/errors"
@@ -26,6 +27,8 @@ import (
 	"go.jetpack.io/devbox/internal/lock"
 	"go.jetpack.io/devbox/internal/redact"
 	"go.jetpack.io/devbox/internal/shellgen"
+	"go.jetpack.io/devbox/internal/telemetry"
+	nixv1alpha1 "go.jetpack.io/pkg/api/gen/priv/nix/v1alpha1"
 
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/debug"
@@ -391,6 +394,7 @@ func resetProfileDirForFlakes(profileDir string) (err error) {
 }
 
 func (d *Devbox) installPackages(ctx context.Context, mode installMode) error {
+	defer debug.FunctionTimer().End()
 	// Create plugin directories first because packages might need them
 	for _, pluginConfig := range d.Config().IncludedPluginConfigs() {
 		if err := d.PluginManager().CreateFilesForConfig(pluginConfig); err != nil {
@@ -427,79 +431,104 @@ func (d *Devbox) InstallRunXPackages(ctx context.Context) error {
 // packages will be available in the nix store when computing the devbox environment
 // and installing in the nix profile (even if offline).
 func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode) error {
+	defer debug.FunctionTimer().End()
 	packages, err := d.packagesToInstallInStore(ctx, mode)
-	if err != nil {
+	if err != nil || len(packages) == 0 {
 		return err
 	}
 
-	stepNum := 0
-	total := len(packages)
+	// --no-link to avoid generating the result objects
+	flags := []string{"--no-link"}
+	if mode == update {
+		flags = append(flags, "--refresh")
+	}
+
+	args := &nix.BuildArgs{
+		Flags:  flags,
+		Writer: d.stderr,
+	}
+	caches, err := d.providers.NixCache.ReadCaches(ctx)
+	if err != nil {
+		debug.Log("error getting nix cache URI, assuming user doesn't have access: %v", err)
+	}
+
+	args.ExtraSubstituters = lo.Map(
+		caches, func(c *nixv1alpha1.NixBinCache, _ int) string {
+			return c.GetUri()
+		})
+
+	// TODO (Landau): handle errors that are not auth.ErrNotLoggedIn
+	// Only lookup credentials if we have a cache to use
+	if len(args.ExtraSubstituters) > 0 {
+		creds, err := d.providers.NixCache.Credentials(ctx)
+		if err == nil {
+			args.Env = creds.Env()
+		}
+
+		u, err := user.Current()
+		if err != nil {
+			err = redact.Errorf("lookup current user: %v", err)
+			debug.Log("error configuring cache: %v", err)
+		}
+		err = d.providers.NixCache.Configure(ctx, u.Username)
+		if err != nil {
+			debug.Log("error configuring cache: %v", err)
+
+			var daemonErr *nix.DaemonError
+			if errors.As(err, &daemonErr) {
+				// Error here to give the user a chance to restart the daemon.
+				return usererr.New("Devbox configured Nix to use a new cache. Please restart the Nix daemon and re-run Devbox.")
+			}
+			// Other errors indicate we couldn't update nix.conf, so just warn and continue
+			// by building from source if necessary.
+			ux.Fwarning(d.stderr, "Devbox was unable to configure Nix to use your organization's private cache. Some packages might be built from source.\n")
+		}
+	}
+
+	packageNames := lo.Map(
+		packages,
+		func(p *devpkg.Package, _ int) string { return p.Raw },
+	)
+	ux.Finfo(
+		d.stderr,
+		"Installing the following packages to the nix store: %s\n",
+		strings.Join(packageNames, ", "),
+	)
+
+	installables := map[bool][]string{false: {}, true: {}}
 	for _, pkg := range packages {
-		stepNum += 1
-
-		stepMsg := fmt.Sprintf("[%d/%d] %s", stepNum, total, pkg)
-		fmt.Fprintf(d.stderr, stepMsg+"\n")
-
-		installables, err := pkg.Installables()
+		pkgInstallables, err := pkg.Installables()
 		if err != nil {
 			return err
 		}
-
-		// --no-link to avoid generating the result objects
-		flags := []string{"--no-link"}
-		if mode == update {
-			flags = append(flags, "--refresh")
-		}
-
-		args := &nix.BuildArgs{
-			AllowInsecure: pkg.HasAllowInsecure(),
-			Flags:         flags,
-			Writer:        d.stderr,
-		}
-		args.ExtraSubstituter, _ = d.providers.NixCache.URI(ctx)
-		// TODO (Landau): handle errors that are not auth.ErrNotLoggedIn
-		// Only lookup credentials if we have a cache to use
-		if args.ExtraSubstituter != "" {
-			creds, err := d.providers.NixCache.Credentials(ctx)
-			if err == nil {
-				args.Env = creds.Env()
-			}
-
-			u, err := user.Current()
-			if err != nil {
-				err = redact.Errorf("lookup current user: %v", err)
-				debug.Log("error configuring cache: %v", err)
-			}
-			err = d.providers.NixCache.Configure(ctx, u.Username)
-			if err != nil {
-				debug.Log("error configuring cache: %v", err)
-
-				var daemonErr *nix.DaemonError
-				if errors.As(err, &daemonErr) {
-					// Error here to give the user a chance to restart the daemon.
-					return usererr.New("Devbox configured Nix to use %q as a cache. Please restart the Nix daemon and re-run Devbox.", args.ExtraSubstituter)
-				}
-				// Other errors indicate we couldn't update nix.conf, so just warn and continue
-				// by building from source if necessary.
-				ux.Fwarning(d.stderr, "Devbox was unable to configure Nix to use your organization's private cache. Some packages might be built from source.")
-			}
-		}
-		for _, installable := range installables {
-			err = nix.Build(ctx, args, installable)
-			if err != nil {
-				fmt.Fprintf(d.stderr, "%s: ", stepMsg)
-				color.New(color.FgRed).Fprintf(d.stderr, "Fail\n")
-				return packageInstallErrorHandler(err, pkg, installable)
-			}
-		}
-
-		fmt.Fprintf(d.stderr, "%s: ", stepMsg)
-		color.New(color.FgGreen).Fprintf(d.stderr, "Success\n")
+		installables[pkg.HasAllowInsecure()] = append(
+			installables[pkg.HasAllowInsecure()],
+			pkgInstallables...,
+		)
 	}
-	return err
+
+	for allowInsecure, installables := range installables {
+		if len(installables) == 0 {
+			continue
+		}
+		eventStart := time.Now()
+		args.AllowInsecure = allowInsecure
+		err = nix.Build(ctx, args, installables...)
+		if err != nil {
+			color.New(color.FgRed).Fprintf(d.stderr, "Fail\n")
+			return err
+		}
+		telemetry.Event(telemetry.EventNixBuildSuccess, telemetry.Metadata{
+			EventStart: eventStart,
+			Packages:   packageNames,
+		})
+	}
+
+	return nil
 }
 
 func (d *Devbox) packagesToInstallInStore(ctx context.Context, mode installMode) ([]*devpkg.Package, error) {
+	defer debug.FunctionTimer().End()
 	// First, get and prepare all the packages that must be installed in this project
 	// and remove non-nix packages from the list
 	packages := lo.Filter(d.InstallablePackages(), devpkg.IsNix)
@@ -533,7 +562,7 @@ func (d *Devbox) packagesToInstallInStore(ctx context.Context, mode installMode)
 		}
 	}
 
-	return packagesToInstall, nil
+	return lo.Uniq(packagesToInstall), nil
 }
 
 // packageInstallErrorHandler checks for two kinds of errors to print custom messages for so that Devbox users

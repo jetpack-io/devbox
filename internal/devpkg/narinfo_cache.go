@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"go.jetpack.io/devbox/internal/boxcli/featureflag"
+	"go.jetpack.io/devbox/internal/debug"
 	"go.jetpack.io/devbox/internal/lock"
 	"go.jetpack.io/devbox/internal/nix"
-	"go.jetpack.io/devbox/internal/vercheck"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -52,6 +54,7 @@ func (p *Package) IsInBinaryCache() (bool, error) {
 // package in the list, and caches the result.
 // Callers of IsInBinaryCache may call this function first as a perf-optimization.
 func FillNarInfoCache(ctx context.Context, packages ...*Package) error {
+	defer debug.FunctionTimer().End()
 	if !featureflag.RemoveNixpkgs.Enabled() {
 		return nil
 	}
@@ -108,11 +111,27 @@ func (p *Package) fetchNarInfoStatusOnce(output string) (bool, error) {
 	type inCacheFunc func() (bool, error)
 	f, ok := narInfoStatusFnCache.Load(p.Raw)
 	if !ok {
-		key := fmt.Sprintf("%s^%s", p.Raw, output)
 		f = inCacheFunc(sync.OnceValues(func() (bool, error) { return p.fetchNarInfoStatus(output) }))
-		f, _ = narInfoStatusFnCache.LoadOrStore(key, f)
+		f, _ = narInfoStatusFnCache.LoadOrStore(p.keyForOutput(output), f)
 	}
 	return f.(inCacheFunc)()
+}
+
+func (p *Package) keyForOutput(output string) string {
+	if output == useDefaultOutput {
+		sysInfo, err := p.sysInfoIfExists()
+		// let's be super safe to always avoid empty key.
+		if err == nil && sysInfo != nil && len(sysInfo.DefaultOutputs()) > 0 {
+			names := make([]string, len(sysInfo.DefaultOutputs()))
+			for i, o := range sysInfo.DefaultOutputs() {
+				names[i] = o.Name
+			}
+			slices.Sort(names)
+			output = strings.Join(names, ",")
+		}
+	}
+
+	return fmt.Sprintf("%s^%s", p.Raw, output)
 }
 
 // fetchNarInfoStatus fetches the cache status for the package. It returns
@@ -206,8 +225,8 @@ func (p *Package) sysInfoIfExists() (*lock.SystemInfo, error) {
 		return nil, err
 	}
 
-	// enable for nix >= 2.17
-	if vercheck.SemverCompare(version, "2.17.0") < 0 {
+	// disable for nix < 2.17
+	if !version.AtLeast(nix.Version2_17) {
 		return nil, err
 	}
 

@@ -14,7 +14,7 @@ In your project's workflow YAML, add the following step:
 
 ```yaml
 - name: Install devbox
-  uses: jetify-com/devbox-install-action@v0.8.0
+  uses: jetify-com/devbox-install-action@v0.11.0
 ```
 
 ## Example Workflow
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install devbox
-        uses: jetify-com/devbox-install-action@v0.8.0
+        uses: jetify-com/devbox-install-action@v0.11.0
 
       - name: Run arbitrary commands
         run: devbox run -- echo "done!"

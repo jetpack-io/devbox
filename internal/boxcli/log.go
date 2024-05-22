@@ -33,14 +33,14 @@ func doLogCommand(cmd *cobra.Command, args []string) error {
 			return usererr.New("expected a start-time argument for logging the shell-ready event")
 		}
 		telemetry.Event(telemetry.EventShellReady, telemetry.Metadata{
-			CommandStart: telemetry.ParseShellStart(args[1]),
+			EventStart: telemetry.ParseShellStart(args[1]),
 		})
 	case "shell-interactive":
 		if len(args) < 2 {
 			return usererr.New("expected a start-time argument for logging the shell-interactive event")
 		}
 		telemetry.Event(telemetry.EventShellInteractive, telemetry.Metadata{
-			CommandStart: telemetry.ParseShellStart(args[1]),
+			EventStart: telemetry.ParseShellStart(args[1]),
 		})
 	}
 	return usererr.New("unrecognized event-name %s for command: %s", args[0], cmd.CommandPath())

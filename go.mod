@@ -23,7 +23,6 @@ require (
 	github.com/getsentry/sentry-go v0.27.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
-	github.com/gosimple/slug v1.14.0
 	github.com/hashicorp/go-envparse v0.1.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-isatty v0.0.20
@@ -40,9 +39,9 @@ require (
 	github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/zealic/go2node v0.1.0
+	go.jetify.com/typeid v1.1.0
 	go.jetpack.io/envsec v0.0.16-0.20240329013200-4174c0acdb00
-	go.jetpack.io/pkg v0.0.0-20240415190428-d17de207b432
-	go.jetpack.io/typeid v1.0.1-0.20240410183543-96a4fd53d1e2
+	go.jetpack.io/pkg v0.0.0-20240516160739-268b3dd5f65d
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	golang.org/x/mod v0.16.0
 	golang.org/x/oauth2 v0.19.0
@@ -94,6 +93,7 @@ require (
 	github.com/google/go-github/v53 v53.2.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
+	github.com/gosimple/slug v1.14.0 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
@@ -124,6 +124,7 @@ require (
 	github.com/therootcompany/xz v1.0.1 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
 	github.com/xtgo/uuid v0.0.0-20140804021211-a0b114877d4c // indirect
+	go.jetpack.io/typeid v1.0.1-0.20240410183543-96a4fd53d1e2 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect

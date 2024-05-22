@@ -4,9 +4,15 @@
 package boxcli
 
 import (
+	"cmp"
+	"fmt"
+	"regexp"
+
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 
+	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/cloud"
 	"go.jetpack.io/devbox/internal/devbox"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
@@ -22,10 +28,21 @@ type generateCmdFlags struct {
 	rootUser          bool
 }
 
+type generateDockerfileCmdFlags struct {
+	generateCmdFlags
+	forType string
+}
+
 type GenerateReadmeCmdFlags struct {
 	generateCmdFlags
 	saveTemplate bool
 	template     string
+}
+
+type GenerateAliasCmdFlags struct {
+	config   configFlags
+	prefix   string
+	noPrefix bool
 }
 
 func generateCmd() *cobra.Command {
@@ -38,6 +55,7 @@ func generateCmd() *cobra.Command {
 		Args:              cobra.MaximumNArgs(0),
 		PersistentPreRunE: ensureNixInstalled,
 	}
+	command.AddCommand(genAliasCmd())
 	command.AddCommand(devcontainerCmd())
 	command.AddCommand(dockerfileCmd())
 	command.AddCommand(debugCmd())
@@ -81,7 +99,7 @@ func devcontainerCmd() *cobra.Command {
 }
 
 func dockerfileCmd() *cobra.Command {
-	flags := &generateCmdFlags{}
+	flags := &generateDockerfileCmdFlags{}
 	command := &cobra.Command{
 		Use:   "dockerfile",
 		Short: "Generate a Dockerfile that replicates devbox shell",
@@ -89,9 +107,25 @@ func dockerfileCmd() *cobra.Command {
 			"Can be used to run devbox shell environment in an OCI container.",
 		Args: cobra.MaximumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGenerateCmd(cmd, flags)
+			box, err := devbox.Open(&devopt.Opts{
+				Dir:         flags.config.path,
+				Environment: flags.config.environment,
+				Stderr:      cmd.ErrOrStderr(),
+			})
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			return box.GenerateDockerfile(cmd.Context(), devopt.GenerateOpts{
+				ForType:  flags.forType,
+				Force:    flags.force,
+				RootUser: flags.rootUser,
+			})
 		},
 	}
+	command.Flags().StringVar(
+		&flags.forType, "for", "dev",
+		"Generate Dockerfile for a specific type of container (dev, prod)")
+	command.Flag("for").Hidden = true
 	command.Flags().BoolVarP(
 		&flags.force, "force", "f", false, "force overwrite existing files")
 	command.Flags().BoolVar(
@@ -180,6 +214,58 @@ func genReadmeCmd() *cobra.Command {
 	return command
 }
 
+func genAliasCmd() *cobra.Command {
+	flags := &GenerateAliasCmdFlags{}
+
+	command := &cobra.Command{
+		Use:   "alias",
+		Short: "Generate shell script aliases for this project",
+		Long: "Generate shell script aliases for this project. " +
+			"Usage is typically `eval \"$(devbox gen alias)\"`.",
+		Args: cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if flags.prefix != "" && flags.noPrefix {
+				return usererr.New(
+					"Cannot use both --prefix and --no-prefix flags together")
+			}
+			box, err := devbox.Open(&devopt.Opts{
+				Dir:    flags.config.path,
+				Stderr: cmd.ErrOrStderr(),
+			})
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			re := regexp.MustCompile("[^a-zA-Z0-9_-]+")
+			prefix := cmp.Or(flags.prefix, box.Config().Root.Name)
+			if prefix == "" && !flags.noPrefix {
+				return usererr.New(
+					"To generate aliases, you must specify a prefix, set a name " +
+						"in devbox.json, or use the --no-prefix flag.")
+			}
+			prefix = re.ReplaceAllString(prefix, "-")
+			for _, script := range box.ListScripts() {
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"alias %s%s='devbox -c \"%s\" run %s'\n",
+					lo.Ternary(flags.noPrefix, "", prefix+"-"),
+					script,
+					box.ProjectDir(),
+					script,
+				)
+			}
+			return nil
+		},
+	}
+	flags.config.register(command)
+	command.Flags().StringVarP(
+		&flags.prefix, "prefix", "p", "", "Prefix for the generated aliases")
+	command.Flags().BoolVar(
+		&flags.noPrefix, "no-prefix", false,
+		"Do not use a prefix for the generated aliases")
+
+	return command
+}
+
 func runGenerateCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
 	// Check the directory exists.
 	box, err := devbox.Open(&devopt.Opts{
@@ -199,8 +285,6 @@ func runGenerateCmd(cmd *cobra.Command, flags *generateCmdFlags) error {
 		return box.Generate(cmd.Context())
 	case "devcontainer":
 		return box.GenerateDevcontainer(cmd.Context(), generateOpts)
-	case "dockerfile":
-		return box.GenerateDockerfile(cmd.Context(), generateOpts)
 	}
 	return nil
 }

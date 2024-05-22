@@ -1,0 +1,60 @@
+name: cache-upload
+# Uploads devbox nix dependencies to cache
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '30 8 * * *' # Run nightly at 8:30 UTC
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEVBOX_API_TOKEN: ${{ secrets.DEVBOX_API_TOKEN }}
+  DEVBOX_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DEVBOX_DEBUG: 1
+
+jobs:
+  upload-cache:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build devbox from scratch because released devbox has a bug that prevents 
+      # DEVBOX_API_TOKEN use
+      # we can remove this after 0.10.6 is out.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+      - name: Build devbox
+        run: | 
+          go build -o dist/devbox ./cmd/devbox
+          sudo mv ./dist/devbox /usr/local/bin/
+
+      # - name: Install devbox
+      #   uses: jetify-com/devbox-install-action@v0.11.0
+      #   with:
+      #     enable-cache: true
+
+      # We upload twice, once before updating and once after. This shows a simple
+      # method to cache the latest current and latest dependencies.
+      # If we want read access to cache on multi-user nix installs (e.g. macos), 
+      # we need to call devbox cache configure. This is currently not working
+      # as expected on CICD.
+      - name: Upload cache
+        run: |
+          devbox cache upload
+          devbox update
+          devbox cache upload

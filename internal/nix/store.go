@@ -24,6 +24,7 @@ func StorePathFromHashPart(ctx context.Context, hash, storeAddr string) (string,
 }
 
 func StorePathsFromInstallable(ctx context.Context, installable string, allowInsecure bool) ([]string, error) {
+	defer debug.FunctionTimer().End()
 	// --impure for NIXPKGS_ALLOW_UNFREE
 	cmd := commandContext(ctx, "path-info", installable, "--json", "--impure")
 	cmd.Env = allowUnfreeEnv(os.Environ())
@@ -53,6 +54,7 @@ func StorePathsFromInstallable(ctx context.Context, installable string, allowIns
 // StorePathsAreInStore returns true if the store path is in the store
 // It relies on `nix store ls` to check if the store path is in the store
 func StorePathsAreInStore(ctx context.Context, storePaths []string) (bool, error) {
+	defer debug.FunctionTimer().End()
 	for _, storePath := range storePaths {
 		cmd := commandContext(ctx, "store", "ls", storePath)
 		debug.Log("Running cmd %s", cmd)
@@ -120,7 +122,22 @@ func (e *DaemonError) Redact() string {
 
 // DaemonVersion returns the version of the currently running Nix daemon.
 func DaemonVersion(ctx context.Context) (string, error) {
-	cmd := commandContext(ctx, "store", "info", "--json", "--store", "daemon")
+	// We only need the version to decide which CLI flags to use. We can
+	// ignore the error because an empty version assumes nix.MinVersion.
+	cliVersion, _ := Version()
+
+	storeCmd := "ping"
+	if cliVersion.AtLeast(Version2_19) {
+		// "nix store ping" is deprecated as of 2.19 in favor of
+		// "nix store info".
+		storeCmd = "info"
+	}
+	canJSON := cliVersion.AtLeast(Version2_14)
+
+	cmd := commandContext(ctx, "store", storeCmd, "--store", "daemon")
+	if canJSON {
+		cmd.Args = append(cmd.Args, "--json")
+	}
 	out, err := cmd.Output()
 
 	// ExitError means the command ran, but couldn't connect.
@@ -139,9 +156,27 @@ func DaemonVersion(ctx context.Context) (string, error) {
 		return "", redact.Errorf("command %s: %s", redact.Safe(cmd), err)
 	}
 
-	info := struct{ Version string }{}
-	if err := json.Unmarshal(out, &info); err != nil {
-		return "", redact.Errorf("%s: unmarshal JSON output: %s", redact.Safe(cmd.String()), err)
+	if len(out) == 0 {
+		return "", redact.Errorf("command %s: empty output", redact.Safe(cmd), err)
 	}
-	return info.Version, nil
+	if canJSON {
+		info := struct{ Version string }{}
+		if err := json.Unmarshal(out, &info); err != nil {
+			return "", redact.Errorf("command %s: unmarshal JSON output: %s", redact.Safe(cmd), err)
+		}
+		return info.Version, nil
+	}
+
+	// Example output:
+	//
+	// Store URL: daemon
+	// Version: 2.21.1
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		name, value, found := strings.Cut(line, ": ")
+		if found && name == "Version" {
+			return value, nil
+		}
+	}
+	return "", redact.Errorf("parse nix daemon version: %s", redact.Safe(lines[0]))
 }

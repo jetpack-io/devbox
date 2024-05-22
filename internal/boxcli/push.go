@@ -22,7 +22,7 @@ func pushCmd() *cobra.Command {
 	flags := pushCmdFlags{}
 	cmd := &cobra.Command{
 		Use: "push <git-repo>",
-		Short: "Push a [global] config. Leave empty to use jetpack cloud. Can " +
+		Short: "Push a [global] config. Leave empty to use jetify cloud. Can " +
 			"be a git repo for self storage.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

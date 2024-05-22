@@ -6,18 +6,21 @@ package generate
 // package generate has functionality to implement the `devbox generate` command
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime/trace"
 	"strings"
+	"text/template"
 
+	"github.com/samber/lo"
+	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/debug"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 )
@@ -54,15 +57,46 @@ type vscode struct {
 	Extensions []string `json:"extensions"`
 }
 
-type dockerfileData struct {
-	IsDevcontainer bool
-	RootUser       bool
-	LocalFlakeDirs []string
+type CreateDockerfileOptions struct {
+	ForType    string
+	HasInstall bool
+	HasBuild   bool
+	HasStart   bool
+	// Ideally we also support process-compose services as the dockerfile
+	// CMD, but I'm currently having trouble getting that to work. Will revisit.
+	// HasServices bool
 }
 
-// CreateDockerfile creates a Dockerfile in path and writes devcontainerDockerfile.tmpl's content into it
-func (g *Options) CreateDockerfile(ctx context.Context) error {
+func (opts CreateDockerfileOptions) Type() string {
+	return cmp.Or(opts.ForType, "dev")
+}
+
+func (opts CreateDockerfileOptions) validate() error {
+	if opts.Type() == "dev" {
+		return nil
+	} else if opts.Type() == "prod" {
+		if opts.HasStart {
+			return nil
+		}
+		return usererr.New(
+			"To generate a prod Dockerfile you must have either 'start' script in " +
+				"devbox.json",
+		)
+	}
+	return usererr.New(
+		"invalid Dockerfile type. Only 'dev' and 'prod' are supported")
+}
+
+// CreateDockerfile creates a Dockerfile in path.
+func (g *Options) CreateDockerfile(
+	ctx context.Context,
+	opts CreateDockerfileOptions,
+) error {
 	defer trace.StartRegion(ctx, "createDockerfile").End()
+
+	if err := opts.validate(); err != nil {
+		return err
+	}
 
 	// create dockerfile
 	file, err := os.Create(filepath.Join(g.Path, "Dockerfile"))
@@ -70,14 +104,18 @@ func (g *Options) CreateDockerfile(ctx context.Context) error {
 		return err
 	}
 	defer file.Close()
-	// get dockerfile content
-	tmplName := "devcontainerDockerfile.tmpl"
-	t := template.Must(template.ParseFS(tmplFS, "tmpl/"+tmplName))
+	path := fmt.Sprintf("tmpl/%s.Dockerfile.tmpl", opts.Type())
+	t := template.Must(template.ParseFS(tmplFS, path))
 	// write content into file
-	return t.Execute(file, &dockerfileData{
-		IsDevcontainer: g.IsDevcontainer,
-		RootUser:       g.RootUser,
-		LocalFlakeDirs: g.LocalFlakeDirs,
+	return t.Execute(file, map[string]any{
+		"IsDevcontainer": g.IsDevcontainer,
+		"RootUser":       g.RootUser,
+		"LocalFlakeDirs": g.LocalFlakeDirs,
+
+		// The following are only used for prod Dockerfile
+		"DevboxRunInstall": lo.Ternary(opts.HasInstall, "devbox run install", "echo 'No install script found, skipping'"),
+		"DevboxRunBuild":   lo.Ternary(opts.HasBuild, "devbox run build", "echo 'No build script found, skipping'"),
+		"Cmd":              fmt.Sprintf("%q, %q, %q", "devbox", "run", "start"),
 	})
 }
 

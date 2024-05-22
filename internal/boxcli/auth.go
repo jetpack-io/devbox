@@ -46,6 +46,8 @@ func loginCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// TODO: all uses of IDClaims() are broken when using a static
+			// non-expiring token (i.e. API_TOKEN)
 			fmt.Fprintf(cmd.ErrOrStderr(), "Logged in as: %s\n", t.IDClaims().Email)
 			return nil
 		},
