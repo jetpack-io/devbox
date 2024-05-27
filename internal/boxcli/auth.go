@@ -38,7 +38,7 @@ func loginCmd() *cobra.Command {
 		Short: "Login to devbox",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := identity.Get().AuthClient()
+			c, err := identity.AuthClient()
 			if err != nil {
 				return err
 			}
@@ -46,6 +46,8 @@ func loginCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// TODO: all uses of IDClaims() are broken when using a static
+			// non-expiring token (i.e. API_TOKEN)
 			fmt.Fprintf(cmd.ErrOrStderr(), "Logged in as: %s\n", t.IDClaims().Email)
 			return nil
 		},
@@ -60,7 +62,7 @@ func logoutCmd() *cobra.Command {
 		Short: "Logout from devbox",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := identity.Get().AuthClient()
+			c, err := identity.AuthClient()
 			if err != nil {
 				return err
 			}
@@ -121,7 +123,7 @@ func authNewTokenCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			token, err := identity.Get().GenSession(ctx)
+			token, err := identity.GenSession(ctx)
 			if err != nil {
 				return err
 			}

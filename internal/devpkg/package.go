@@ -16,11 +16,13 @@ import (
 	"github.com/samber/lo"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/cachehash"
+	"go.jetpack.io/devbox/internal/debug"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
 	"go.jetpack.io/devbox/internal/devconfig/configfile"
 	"go.jetpack.io/devbox/internal/devpkg/pkgtype"
 	"go.jetpack.io/devbox/internal/lock"
 	"go.jetpack.io/devbox/internal/nix"
+	"go.jetpack.io/devbox/internal/ux"
 	"go.jetpack.io/devbox/nix/flake"
 	"go.jetpack.io/devbox/plugins"
 )
@@ -240,13 +242,13 @@ func (p *Package) PatchGlibc() bool {
 // Installables for this package. Installables is a nix concept defined here:
 // https://nixos.org/manual/nix/stable/command-ref/new-cli/nix.html#installables
 func (p *Package) Installables() ([]string, error) {
-	outputs, err := p.GetOutputNames()
+	outputNames, err := p.GetOutputNames()
 	if err != nil {
 		return nil, err
 	}
 	installables := []string{}
-	for _, output := range outputs {
-		i, err := p.InstallableForOutput(output)
+	for _, outputName := range outputNames {
+		i, err := p.InstallableForOutput(outputName)
 		if err != nil {
 			return nil, err
 		}
@@ -682,4 +684,135 @@ func (p *Package) GetOutputNames() ([]string, error) {
 	}
 
 	return p.outputs.GetNames(p)
+}
+
+// GetOutputsWithCache return outputs and their cache URIs if the package is in the binary cache.
+// n+1 WARNING: This will make an http request if FillNarInfoCache is not called before.
+// Grep note: this is used in flake template
+func (p *Package) GetOutputsWithCache() ([]Output, error) {
+	defer debug.FunctionTimer().End()
+
+	names, err := p.GetOutputNames()
+	if err != nil || len(names) == 0 {
+		return nil, err
+	}
+
+	isEligibleForBinaryCache, err := p.isEligibleForBinaryCache()
+	if err != nil {
+		return nil, err
+	}
+
+	outputs := []Output{}
+	for _, name := range names {
+		output := Output{Name: name}
+		if isEligibleForBinaryCache {
+			status, err := p.fetchNarInfoStatusOnce(name)
+			if err != nil {
+				return nil, err
+			}
+			output.CacheURI = status[name]
+		}
+		outputs = append(outputs, output)
+	}
+	return outputs, nil
+}
+
+// GetResolvedStorePaths returns the store paths that are resolved (in lockfile)
+func (p *Package) GetResolvedStorePaths() ([]string, error) {
+	names, err := p.GetOutputNames()
+	if err != nil {
+		return nil, err
+	}
+	storePaths := []string{}
+	for _, name := range names {
+		outputs, err := p.outputsForOutputName(name)
+		if err != nil {
+			return nil, err
+		}
+		for _, output := range outputs {
+			storePaths = append(storePaths, output.Path)
+		}
+	}
+	return storePaths, nil
+}
+
+func (p *Package) GetStorePaths(ctx context.Context, w io.Writer) ([]string, error) {
+	storePathsForPackage, err := p.GetResolvedStorePaths()
+	if err != nil || len(storePathsForPackage) > 0 {
+		return storePathsForPackage, err
+	}
+
+	// No fast path, we need to query nix.
+	// TODO we should give people the option to add paths to lockfile.
+	ux.Fwarning(
+		w,
+		"Outputs for %s are not in lockfile. Fetching store paths from nix, this may take a while\n",
+		p.Raw,
+	)
+
+	installables, err := p.Installables()
+	if err != nil {
+		return nil, err
+	}
+	for _, installable := range installables {
+		storePathsForInstallable, err := nix.StorePathsFromInstallable(
+			ctx, installable, p.HasAllowInsecure())
+		if err != nil {
+			return nil, packageInstallErrorHandler(err, p, installable)
+		}
+		storePathsForPackage = append(storePathsForPackage, storePathsForInstallable...)
+	}
+	return storePathsForPackage, nil
+}
+
+// packageInstallErrorHandler checks for two kinds of errors to print custom messages for so that Devbox users
+// can work around them:
+// 1. Packages that cannot be installed on the current system, but may be installable on other systems.packageInstallErrorHandler
+// 2. Packages marked insecure by nix
+func packageInstallErrorHandler(err error, pkg *Package, installableOrEmpty string) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check if the user is installing a package that cannot be installed on their platform.
+	// For example, glibcLocales on MacOS will give the following error:
+	// flake output attribute 'legacyPackages.x86_64-darwin.glibcLocales' is not a derivation or path
+	// This is because glibcLocales is only available on Linux.
+	// The user should try `devbox add` again with `--exclude-platform`
+	errMessage := strings.TrimSpace(err.Error())
+
+	// Sample error from `devbox add glibcLocales` on a mac:
+	// error: flake output attribute 'legacyPackages.x86_64-darwin.glibcLocales' is not a derivation or path
+	maybePackageSystemCompatibilityErrorType1 := strings.Contains(errMessage, "error: flake output attribute") &&
+		strings.Contains(errMessage, "is not a derivation or path")
+	// Sample error from `devbox add sublime4` on a mac:
+	// error: Package ‘sublimetext4-4169’ in /nix/store/nlbjx0mp83p2qzf1rkmzbgvq1wxfir81-source/pkgs/applications/editors/sublime/4/common.nix:168 is not available on the requested hostPlatform:
+	//     hostPlatform.config = "x86_64-apple-darwin"
+	//     package.meta.platforms = [
+	//       "aarch64-linux"
+	//       "x86_64-linux"
+	//    ]
+	maybePackageSystemCompatibilityErrorType2 := strings.Contains(errMessage, "is not available on the requested hostPlatform")
+
+	if maybePackageSystemCompatibilityErrorType1 || maybePackageSystemCompatibilityErrorType2 {
+		platform := nix.System()
+		return usererr.WithUserMessage(
+			err,
+			"package %s cannot be installed on your platform %s.\n"+
+				"If you know this package is incompatible with %[2]s, then "+
+				"you could run `devbox add %[1]s --exclude-platform %[2]s` and re-try.\n"+
+				"If you think this package should be compatible with %[2]s, then "+
+				"it's possible this particular version is not available yet from the nix registry. "+
+				"You could try `devbox add` with a different version for this package.\n\n"+
+				"Underlying Error from nix is:",
+			pkg.Versioned(),
+			platform,
+		)
+	}
+
+	if isInsecureErr, userErr := nix.IsExitErrorInsecurePackage(err, pkg.Versioned(), installableOrEmpty); isInsecureErr {
+		return userErr
+	}
+
+	return usererr.WithUserMessage(err, "error installing package %s", pkg.Raw)
 }

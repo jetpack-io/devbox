@@ -52,7 +52,7 @@ func secretsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "secrets",
 		Aliases:           []string{"envsec"},
-		Short:             "Interact with devbox secrets in jetpack cloud.",
+		Short:             "Interact with devbox secrets in jetify cloud.",
 		PersistentPreRunE: ensureNixInstalled,
 	}
 	cmd.AddCommand(secretsDownloadCmd(flags))
@@ -71,7 +71,7 @@ func secretsInitCmd(secretsFlags *secretsFlags) *cobra.Command {
 	flags := secretsInitCmdFlags{}
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize secrets management with jetpack cloud",
+		Short: "Initialize secrets management with jetify cloud",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return secretsInitFunc(cmd, flags, secretsFlags)

@@ -37,6 +37,7 @@ func Push(
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
 	_, err = s3Client.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucket),

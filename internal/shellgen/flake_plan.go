@@ -14,7 +14,6 @@ import (
 // flakePlan contains the data to populate the top level flake.nix file
 // that builds the devbox environment
 type flakePlan struct {
-	BinaryCache string
 	NixpkgsInfo *NixpkgsInfo
 	Packages    []*devpkg.Package
 	FlakeInputs []flakeInput
@@ -52,7 +51,6 @@ func newFlakePlan(ctx context.Context, devbox devboxer) (*flakePlan, error) {
 	}
 
 	return &flakePlan{
-		BinaryCache: devpkg.BinaryCache,
 		FlakeInputs: flakeInputs,
 		NixpkgsInfo: nixpkgsInfo,
 		Packages:    packages,
@@ -141,7 +139,7 @@ func (g *glibcPatchFlake) fetchClosureExpr(pkg *devpkg.Package) (string, error) 
   fromStore = "%s";
   fromPath = "%s";
   inputAddressed = true;
-}`, devpkg.BinaryCache, storePaths[0]), nil
+}`, "devpkg.BinaryCache", storePaths[0]), nil
 }
 
 func (g *glibcPatchFlake) writeTo(dir string) error {

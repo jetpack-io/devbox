@@ -14,12 +14,7 @@ import (
 	"go.jetpack.io/devbox/internal/ux"
 )
 
-type globalShellEnvCmdFlags struct {
-	recompute bool
-}
-
 func globalCmd() *cobra.Command {
-	globalShellEnvCmdFlags := globalShellEnvCmdFlags{}
 	globalCmd := &cobra.Command{}
 	persistentPreRunE := setGlobalConfigForDelegatedCommands(globalCmd)
 	*globalCmd = cobra.Command{
@@ -33,11 +28,17 @@ func globalCmd() *cobra.Command {
 		PersistentPostRunE: ensureGlobalEnvEnabled,
 	}
 
-	shellEnv := shellEnvCmd(&globalShellEnvCmdFlags.recompute)
-	shellEnv.Flags().BoolVarP(
-		&globalShellEnvCmdFlags.recompute, "recompute", "r", false,
-		"Recompute environment if needed",
-	)
+	shellEnv := shellEnvCmd()
+	// For `devbox shellenv` the default value of recompute is true.
+	// Change the default value to false for `devbox global shellenv` only.
+	shellEnv.Flag("recompute").DefValue = "false" // Needed for help text
+	if err := shellEnv.Flag("recompute").Value.Set("false"); err != nil {
+		// This will never panic because internally it just does
+		// `strconv.ParseBool("false")` which is always valid.
+		// If this were to change, we'll immediately detect this during development
+		// since this code always runs on any devbox command (and will fix it).
+		panic(errors.WithStack(err))
+	}
 
 	addCommandAndHideConfigFlag(globalCmd, addCmd())
 	addCommandAndHideConfigFlag(globalCmd, installCmd())

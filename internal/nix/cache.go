@@ -21,6 +21,8 @@ func CopyInstallableToCache(
 	cmd := commandContext(
 		ctx,
 		"copy", "--to", to,
+		// --impure makes NIXPKGS_ALLOW_* environment variables work.
+		"--impure",
 		// --refresh checks the cache to ensure it is up to date. Otherwise if
 		// anything has was copied previously from this machine and then purged
 		// it may not be copied again. It's fairly fast, but not instant.
@@ -31,7 +33,7 @@ func CopyInstallableToCache(
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = out
 	cmd.Stderr = out
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(allowUnfreeEnv(allowInsecureEnv(os.Environ())), env...)
 
 	return cmd.Run()
 }

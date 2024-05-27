@@ -1,5 +1,10 @@
 package devpkg
 
+type Output struct {
+	Name     string
+	CacheURI string
+}
+
 // outputs are the nix package outputs
 type outputs struct {
 	selectedNames []string

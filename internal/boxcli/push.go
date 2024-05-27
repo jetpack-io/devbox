@@ -22,7 +22,7 @@ func pushCmd() *cobra.Command {
 	flags := pushCmdFlags{}
 	cmd := &cobra.Command{
 		Use: "push <git-repo>",
-		Short: "Push a [global] config. Leave empty to use jetpack cloud. Can " +
+		Short: "Push a [global] config. Leave empty to use jetify cloud. Can " +
 			"be a git repo for self storage.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,7 +44,7 @@ func pushCmdFunc(cmd *cobra.Command, url string, flags pushCmdFlags) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	t, err := identity.Get().GenSession(cmd.Context())
+	t, err := identity.GenSession(cmd.Context())
 	var creds devopt.Credentials
 	if err != nil && !errors.Is(err, auth.ErrNotLoggedIn) {
 		return errors.WithStack(err)

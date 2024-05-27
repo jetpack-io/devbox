@@ -82,7 +82,10 @@ State directory: /nix/var/nix
 Data directory: /nix/store/m0ns07v8by0458yp6k30rfq1rs3kaz6g-nix-2.21.2/share
 `
 
-	info := parseVersionInfo([]byte(raw))
+	info, err := parseVersionInfo([]byte(raw))
+	if err != nil {
+		t.Error("got parse error:", err)
+	}
 	if got, want := info.Name, "nix"; got != want {
 		t.Errorf("got Name = %q, want %q", got, want)
 	}
@@ -116,7 +119,10 @@ Data directory: /nix/store/m0ns07v8by0458yp6k30rfq1rs3kaz6g-nix-2.21.2/share
 }
 
 func TestParseVersionInfoShort(t *testing.T) {
-	info := parseVersionInfo([]byte("nix (Nix) 2.21.2"))
+	info, err := parseVersionInfo([]byte("nix (Nix) 2.21.2"))
+	if err != nil {
+		t.Error("got parse error:", err)
+	}
 	if got, want := info.Name, "nix"; got != want {
 		t.Errorf("got Name = %q, want %q", got, want)
 	}
@@ -125,33 +131,59 @@ func TestParseVersionInfoShort(t *testing.T) {
 	}
 }
 
-func TestParseVersionInfoEmpty(t *testing.T) {
-	// Don't panic.
-	parseVersionInfo(nil)
-	parseVersionInfo([]byte{})
-}
-
-func TestVersionInfoVersion(t *testing.T) {
-	t.Run("Valid", func(t *testing.T) {
-		info := VersionInfo{Version: "2.21.0"}
-		got, err := info.version()
-		if err != nil {
-			t.Error("got error:", err)
-		}
-		if got != info.Version {
-			t.Fatalf("got version %q, want %q", got, info.Version)
+func TestParseVersionInfoError(t *testing.T) {
+	t.Run("NilOutput", func(t *testing.T) {
+		_, err := parseVersionInfo(nil)
+		if err == nil {
+			t.Error("want non-nil error")
 		}
 	})
-
-	t.Run("Empty", func(t *testing.T) {
-		info := VersionInfo{}
-		if _, err := info.version(); err == nil {
+	t.Run("EmptyOutput", func(t *testing.T) {
+		_, err := parseVersionInfo([]byte{})
+		if err == nil {
 			t.Error("want non-nil error")
 		}
-
-		info.raw = "nix output without a version"
-		if _, err := info.version(); err == nil {
+	})
+	t.Run("MissingVersionOutput", func(t *testing.T) {
+		_, err := parseVersionInfo([]byte("nix output without a version"))
+		if err == nil {
 			t.Error("want non-nil error")
 		}
+	})
+}
+
+func TestVersionInfoAtLeast(t *testing.T) {
+	info := VersionInfo{}
+	if info.AtLeast(Version2_12) {
+		t.Errorf("got empty current version >= %s", Version2_12)
+	}
+
+	info.Version = Version2_13
+	if !info.AtLeast(Version2_12) {
+		t.Errorf("got %s < %s", info.Version, Version2_12)
+	}
+	if !info.AtLeast(Version2_13) {
+		t.Errorf("got %s < %s", info.Version, Version2_13)
+	}
+	if info.AtLeast(Version2_14) {
+		t.Errorf("got %s >= %s", info.Version, Version2_14)
+	}
+
+	t.Run("ArgEmptyPanic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("want panic for empty version")
+			}
+		}()
+		info.AtLeast("")
+	})
+	t.Run("ArgInvalidPanic", func(t *testing.T) {
+		v := "notasemver"
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("want panic for invalid version %q", v)
+			}
+		}()
+		info.AtLeast(v)
 	})
 }

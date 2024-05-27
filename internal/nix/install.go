@@ -20,14 +20,11 @@ import (
 	"go.jetpack.io/devbox/internal/build"
 	"go.jetpack.io/devbox/internal/cmdutil"
 	"go.jetpack.io/devbox/internal/fileutil"
+	"go.jetpack.io/devbox/internal/redact"
 	"go.jetpack.io/devbox/internal/ux"
-	"go.jetpack.io/devbox/internal/vercheck"
 )
 
-const (
-	minNixVersion = "2.12.0"
-	rootError     = "warning: installing Nix as root is not supported by this script!"
-)
+const rootError = "warning: installing Nix as root is not supported by this script!"
 
 // Install runs the install script for Nix. daemon has 3 states
 // nil is unset. false is --no-daemon. true is --daemon.
@@ -111,19 +108,20 @@ func EnsureNixInstalled(writer io.Writer, withDaemonFunc func() *bool) (err erro
 		if err != nil {
 			return
 		}
-		version := ""
+
+		var version VersionInfo
 		version, err = Version()
 		if err != nil {
-			err = fmt.Errorf("failed to get nix version: %w", err)
+			err = redact.Errorf("nix: ensure install: get version: %w", err)
 			return
 		}
 
 		// ensure minimum nix version installed
-		if vercheck.SemverCompare(version, minNixVersion) < 0 {
+		if !version.AtLeast(MinVersion) {
 			err = usererr.New(
 				"Devbox requires nix of version >= %s. Your version is %s. "+
 					"Please upgrade nix and try again.\n",
-				minNixVersion,
+				MinVersion,
 				version,
 			)
 			return

@@ -22,6 +22,7 @@ import (
 	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/redact"
+	"golang.org/x/mod/semver"
 
 	"go.jetpack.io/devbox/internal/debug"
 )
@@ -174,6 +175,22 @@ func SystemIsLinux() bool {
 	return strings.Contains(System(), "linux")
 }
 
+// All major Nix versions supported by Devbox.
+const (
+	Version2_12 = "2.12.0"
+	Version2_13 = "2.13.0"
+	Version2_14 = "2.14.0"
+	Version2_15 = "2.15.0"
+	Version2_16 = "2.16.0"
+	Version2_17 = "2.17.0"
+	Version2_18 = "2.18.0"
+	Version2_19 = "2.19.0"
+	Version2_20 = "2.20.0"
+	Version2_21 = "2.21.0"
+
+	MinVersion = Version2_12
+)
+
 // VersionInfo contains information about a Nix installation.
 type VersionInfo struct {
 	// Name is the executed program name (the first element of argv).
@@ -210,12 +227,9 @@ type VersionInfo struct {
 	// DataDir is the path to the Nix data directory, usually somewhere
 	// within the Nix store. This field is empty for Nix versions <= 2.12.
 	DataDir string
-
-	// raw is the raw nix --version --debug output.
-	raw string
 }
 
-func parseVersionInfo(data []byte) VersionInfo {
+func parseVersionInfo(data []byte) (VersionInfo, error) {
 	// Example nix --version --debug output from Nix versions 2.12 to 2.21.
 	// Version 2.12 omits the data directory, but they're otherwise
 	// identical.
@@ -232,13 +246,17 @@ func parseVersionInfo(data []byte) VersionInfo {
 	// State directory: /nix/var/nix
 	// Data directory: /nix/store/m0ns07v8by0458yp6k30rfq1rs3kaz6g-nix-2.21.2/share
 
-	info := VersionInfo{raw: string(data)}
-	if len(info.raw) == 0 {
-		return info
+	info := VersionInfo{}
+	if len(data) == 0 {
+		return info, redact.Errorf("empty nix --version output")
 	}
 
-	lines := strings.Split(info.raw, "\n")
-	info.Name, info.Version, _ = strings.Cut(lines[0], " (Nix) ")
+	lines := strings.Split(string(data), "\n")
+	found := false
+	info.Name, info.Version, found = strings.Cut(lines[0], " (Nix) ")
+	if !found {
+		return info, redact.Errorf("parse nix version: %s", redact.Safe(lines[0]))
+	}
 	for _, line := range lines {
 		name, value, found := strings.Cut(line, ": ")
 		if !found {
@@ -264,18 +282,21 @@ func parseVersionInfo(data []byte) VersionInfo {
 			info.DataDir = value
 		}
 	}
-	return info
+	return info, nil
 }
 
-func (v VersionInfo) version() (string, error) {
-	if v.Version == "" {
-		firstLine, _, _ := strings.Cut(v.raw, "\n")
-		if strings.TrimSpace(firstLine) == "" {
-			firstLine = "empty nix --version output"
-		}
-		return "", redact.Errorf("parse nix version: %s", redact.Safe(firstLine))
+// AtLeast returns true if v.Version is >= version per semantic versioning. It
+// always returns false if v.Version is empty or invalid, such as when the
+// current Nix version cannot be parsed. It panics if version is an invalid
+// semver.
+func (v VersionInfo) AtLeast(version string) bool {
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
 	}
-	return v.Version, nil
+	if !semver.IsValid(version) {
+		panic(fmt.Sprintf("nix.atLeast: invalid version %q", version[1:]))
+	}
+	return semver.Compare("v"+v.Version, version) >= 0
 }
 
 // version is the cached output of `nix --version --debug`.
@@ -283,7 +304,7 @@ var versionInfo = sync.OnceValues(runNixVersion)
 
 func runNixVersion() (VersionInfo, error) {
 	// Arbitrary timeout to make sure we don't take too long or hang.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Intentionally don't use the nix.command function here. We use this to
@@ -292,28 +313,23 @@ func runNixVersion() (VersionInfo, error) {
 	cmd := exec.CommandContext(ctx, "nix", "--version", "--debug")
 	out, err := cmd.Output()
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return VersionInfo{}, redact.Errorf("nix command: %s: timed out while reading output", redact.Safe(cmd))
-		}
-
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) != 0 {
 			return VersionInfo{}, redact.Errorf("nix command: %s: %q: %v", redact.Safe(cmd), exitErr.Stderr, err)
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return VersionInfo{}, redact.Errorf("nix command: %s: timed out while reading output: %v", redact.Safe(cmd), err)
 		}
 		return VersionInfo{}, redact.Errorf("nix command: %s: %v", redact.Safe(cmd), err)
 	}
 
 	debug.Log("nix --version --debug output:\n%s", out)
-	return parseVersionInfo(out), nil
+	return parseVersionInfo(out)
 }
 
 // Version returns the currently installed version of Nix.
-func Version() (string, error) {
-	info, err := versionInfo()
-	if err != nil {
-		return "", err
-	}
-	return info.version()
+func Version() (VersionInfo, error) {
+	return versionInfo()
 }
 
 var nixPlatforms = []string{

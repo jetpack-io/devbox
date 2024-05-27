@@ -91,3 +91,10 @@ func SuccessRedirect() string {
 func Audience() []string {
 	return []string{"https://api.jetpack.io"}
 }
+
+func DashboardHostname() string {
+	if IsDev {
+		return "http://localhost:8080"
+	}
+	return "https://cloud.jetify.com"
+}

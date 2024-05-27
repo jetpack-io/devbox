@@ -27,7 +27,6 @@ import (
 	"go.jetpack.io/devbox/internal/cachehash"
 	"go.jetpack.io/devbox/internal/devbox/envpath"
 	"go.jetpack.io/devbox/internal/devbox/generate"
-	"go.jetpack.io/devbox/internal/devbox/providers"
 	"go.jetpack.io/devbox/internal/devpkg"
 	"go.jetpack.io/devbox/internal/devpkg/pkgtype"
 	"go.jetpack.io/devbox/internal/searcher"
@@ -55,7 +54,7 @@ const (
 
 	// shellHistoryFile keeps the history of commands invoked inside devbox shell
 	shellHistoryFile            = ".devbox/shell_history"
-	processComposeTargetVersion = "v0.85.0"
+	processComposeTargetVersion = "v1.5.0"
 	arbitraryCmdFilename        = ".cmd"
 )
 
@@ -66,7 +65,6 @@ type Devbox struct {
 	lockfile                 *lock.File
 	nix                      nix.Nixer
 	projectDir               string
-	providers                providers.Providers
 	pluginManager            *plugin.Manager
 	preservePathStack        bool
 	pure                     bool
@@ -451,7 +449,7 @@ func (d *Devbox) GenerateDevcontainer(ctx context.Context, generateOpts devopt.G
 	}
 
 	// generate dockerfile
-	err = gen.CreateDockerfile(ctx)
+	err = gen.CreateDockerfile(ctx, generate.CreateDockerfileOptions{})
 	if err != nil {
 		return redact.Errorf("error generating dev container Dockerfile in <project>/%s: %w",
 			redact.Safe(filepath.Base(devContainerPath)), err)
@@ -489,8 +487,15 @@ func (d *Devbox) GenerateDockerfile(ctx context.Context, generateOpts devopt.Gen
 		LocalFlakeDirs: d.getLocalFlakesDirs(),
 	}
 
+	scripts := d.cfg.Scripts()
+
 	// generate dockerfile
-	return errors.WithStack(gen.CreateDockerfile(ctx))
+	return errors.WithStack(gen.CreateDockerfile(ctx, generate.CreateDockerfileOptions{
+		ForType:    generateOpts.ForType,
+		HasBuild:   scripts["build"] != nil,
+		HasInstall: scripts["install"] != nil,
+		HasStart:   scripts["start"] != nil,
+	}))
 }
 
 func PrintEnvrcContent(w io.Writer, envFlags devopt.EnvFlags) error {
@@ -1157,7 +1162,7 @@ func (d *Devbox) configEnvs(
 		} else if err != nil {
 			ux.Fwarning(
 				d.stderr,
-				"Ignoring env_from directive. jetpack cloud secrets is not "+
+				"Ignoring env_from directive. jetify cloud secrets is not "+
 					"initialized. Run `devbox secrets init` to initialize it.\n",
 			)
 		} else {
@@ -1165,7 +1170,7 @@ func (d *Devbox) configEnvs(
 			if err != nil {
 				ux.Fwarning(
 					os.Stderr,
-					"Error reading secrets from jetpack cloud: %s\n\n",
+					"Error reading secrets from jetify cloud: %s\n\n",
 					err,
 				)
 			} else {
@@ -1268,6 +1273,8 @@ func (d *Devbox) parseEnvAndExcludeSpecialCases(currentEnv []string) (map[string
 
 	// handling special case for PATH
 	if d.pure {
+		// Setting a custom env variable to differentiate pure and regular shell
+		env["DEVBOX_PURE_SHELL"] = "1"
 		// Finding nix executables in path and passing it through
 		// As well as adding devbox itself to PATH
 		// Both are needed for devbox commands inside pure shell to work

@@ -16,7 +16,7 @@ COPY devbox.lock devbox.lock
 {{- end}}
 
 {{if len .LocalFlakeDirs}}
-# Step 6: Copying local flakes directories
+# Copying local flakes directories
 {{- end}}
 {{range $i, $element := .LocalFlakeDirs -}}
 COPY {{$element}} {{$element}}

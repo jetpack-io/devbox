@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 	"go.jetpack.io/devbox/internal/debug"
@@ -12,22 +13,26 @@ import (
 )
 
 type BuildArgs struct {
-	AllowInsecure    bool
-	Env              []string
-	ExtraSubstituter string
-	Flags            []string
-	Writer           io.Writer
+	AllowInsecure     bool
+	Env               []string
+	ExtraSubstituters []string
+	Flags             []string
+	Writer            io.Writer
 }
 
 func Build(ctx context.Context, args *BuildArgs, installables ...string) error {
+	defer debug.FunctionTimer().End()
 	// --impure is required for allowUnfreeEnv/allowInsecureEnv to work.
 	cmd := commandContext(ctx, "build", "--impure")
 	cmd.Args = append(cmd.Args, args.Flags...)
 	cmd.Args = append(cmd.Args, installables...)
 	// Adding extra substituters only here to be conservative, but this could also
 	// be added to ExperimentalFlags() in the future.
-	if args.ExtraSubstituter != "" {
-		cmd.Args = append(cmd.Args, "--extra-substituters", args.ExtraSubstituter)
+	if len(args.ExtraSubstituters) > 0 {
+		cmd.Args = append(cmd.Args,
+			"--extra-substituters",
+			strings.Join(args.ExtraSubstituters, " "),
+		)
 	}
 	cmd.Env = append(allowUnfreeEnv(os.Environ()), args.Env...)
 	if args.AllowInsecure {
