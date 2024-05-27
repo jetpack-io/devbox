@@ -96,12 +96,12 @@ func (f *flakeInput) BuildInputsForSymlinkJoin() ([]*SymlinkJoin, error) {
 
 		joins = append(joins, &SymlinkJoin{
 			Name: pkg.String() + "-combined",
-			Paths: lo.Map(outputNames, func(output string, _ int) string {
+			Paths: lo.Map(outputNames, func(outputName string, _ int) string {
 				if !f.IsNixpkgs() {
-					return f.Name + "." + attributePath + "." + output
+					return f.Name + "." + attributePath + "." + outputName
 				}
 				parts := strings.Split(attributePath, ".")
-				return f.PkgImportName() + "." + strings.Join(parts[2:], ".") + "." + output
+				return f.PkgImportName() + "." + strings.Join(parts[2:], ".") + "." + outputName
 			}),
 		})
 	}

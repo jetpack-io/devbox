@@ -21,15 +21,15 @@ import (
 	"go.jetpack.io/devbox/internal/ux"
 )
 
-func (p *Provider) Configure(ctx context.Context, username string) error {
-	return p.configure(ctx, username, false)
+func Configure(ctx context.Context, username string) error {
+	return configure(ctx, username, false)
 }
 
-func (p *Provider) ConfigureReprompt(ctx context.Context, username string) error {
-	return p.configure(ctx, username, true)
+func ConfigureReprompt(ctx context.Context, username string) error {
+	return configure(ctx, username, true)
 }
 
-func (p *Provider) configure(ctx context.Context, username string, reprompt bool) error {
+func configure(ctx context.Context, username string, reprompt bool) error {
 	const key = "nixcache-setup"
 	if reprompt {
 		setup.Reset(key)

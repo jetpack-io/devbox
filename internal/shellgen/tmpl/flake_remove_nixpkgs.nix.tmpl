@@ -38,11 +38,18 @@
         devShells.{{ .System }}.default = pkgs.mkShell {
           buildInputs = [
             {{- range $_, $pkg := .Packages }}
-            {{- range $_, $outputName := $pkg.GetOutputNames }}
-            {{ if and ($pkg.IsOutputInBinaryCache $outputName) (not $pkg.PatchGlibc) -}}
+            {{- range $_, $output := $pkg.GetOutputsWithCache }}
+            {{ if $output.CacheURI -}}
             (builtins.trace "downloading {{ $pkg.Versioned }}" (builtins.fetchClosure {
-              fromStore = "{{ $.BinaryCache }}";
-              fromPath = "{{ $pkg.InputAddressedPathForOutput $outputName }}";
+              {{/*  
+                HACK HACK HACK! fetchClosure only supports http(s) caches and not
+                s3 caches. Until we implement that, we put a fake store here.
+                Since we pre-build everything, fetchClosure will not actually
+                fetch anything and just use the local version. This may break
+                if user somehow removes the local store path.
+              */}}
+              fromStore = "https://cache.nixos.org";
+              fromPath = "{{ $pkg.InputAddressedPathForOutput $output.Name }}";
               inputAddressed = true;
             }))
             {{- end }}

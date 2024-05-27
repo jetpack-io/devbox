@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.jetpack.io/devbox/internal/devbox/devopt"
+	"go.jetpack.io/devbox/internal/devbox/providers/nixcache"
 	"go.jetpack.io/devbox/internal/devconfig"
 	"go.jetpack.io/devbox/internal/devconfig/configfile"
 	"go.jetpack.io/devbox/internal/devpkg"
@@ -403,10 +403,24 @@ func (d *Devbox) installPackages(ctx context.Context, mode installMode) error {
 	}
 
 	if err := d.installNixPackagesToStore(ctx, mode); err != nil {
+		if caches, _ := nixcache.CachedReadCaches(ctx); len(caches) > 0 {
+			err = d.handleInstallFailure(ctx, mode)
+		}
 		return err
 	}
 
 	return d.InstallRunXPackages(ctx)
+}
+
+func (d *Devbox) handleInstallFailure(ctx context.Context, mode installMode) error {
+	ux.Fwarning(d.stderr, "Failed to build from cache, building from source.\n")
+	telemetry.Event(telemetry.EventNixBuildWithSubstitutersFailed, telemetry.Metadata{
+		Packages: lo.Map(
+			d.InstallablePackages(), func(p *devpkg.Package, _ int) string { return p.Raw }),
+	})
+	nixcache.DisableReadCaches()
+	devpkg.ClearNarInfoCache()
+	return d.installNixPackagesToStore(ctx, mode)
 }
 
 func (d *Devbox) InstallRunXPackages(ctx context.Context) error {
@@ -447,7 +461,7 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 		Flags:  flags,
 		Writer: d.stderr,
 	}
-	caches, err := d.providers.NixCache.ReadCaches(ctx)
+	caches, err := nixcache.CachedReadCaches(ctx)
 	if err != nil {
 		debug.Log("error getting nix cache URI, assuming user doesn't have access: %v", err)
 	}
@@ -460,7 +474,7 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 	// TODO (Landau): handle errors that are not auth.ErrNotLoggedIn
 	// Only lookup credentials if we have a cache to use
 	if len(args.ExtraSubstituters) > 0 {
-		creds, err := d.providers.NixCache.Credentials(ctx)
+		creds, err := nixcache.CachedCredentials(ctx)
 		if err == nil {
 			args.Env = creds.Env()
 		}
@@ -470,7 +484,7 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 			err = redact.Errorf("lookup current user: %v", err)
 			debug.Log("error configuring cache: %v", err)
 		}
-		err = d.providers.NixCache.Configure(ctx, u.Username)
+		err = nixcache.Configure(ctx, u.Username)
 		if err != nil {
 			debug.Log("error configuring cache: %v", err)
 
@@ -515,7 +529,6 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 		args.AllowInsecure = allowInsecure
 		err = nix.Build(ctx, args, installables...)
 		if err != nil {
-			color.New(color.FgRed).Fprintf(d.stderr, "Fail\n")
 			return err
 		}
 		telemetry.Event(telemetry.EventNixBuildSuccess, telemetry.Metadata{
@@ -538,83 +551,35 @@ func (d *Devbox) packagesToInstallInStore(ctx context.Context, mode installMode)
 
 	// Second, check which packages are not in the nix store
 	packagesToInstall := []*devpkg.Package{}
+	storePathsForPackage := map[*devpkg.Package][]string{}
 	for _, pkg := range packages {
-		installables, err := pkg.Installables()
+		if mode == update {
+			packagesToInstall = append(packagesToInstall, pkg)
+			continue
+		}
+		var err error
+		storePathsForPackage[pkg], err = pkg.GetStorePaths(ctx, d.stderr)
 		if err != nil {
 			return nil, err
 		}
-		for _, installable := range installables {
-			if mode == update {
+	}
+
+	// Batch this for perf
+	storePathMap, err := nix.StorePathsAreInStore(ctx, lo.Flatten(lo.Values(storePathsForPackage)))
+	if err != nil {
+		return nil, err
+	}
+
+	for pkg, storePaths := range storePathsForPackage {
+		for _, storePath := range storePaths {
+			if !storePathMap[storePath] {
 				packagesToInstall = append(packagesToInstall, pkg)
-				continue
-			}
-			storePaths, err := nix.StorePathsFromInstallable(ctx, installable, pkg.HasAllowInsecure())
-			if err != nil {
-				return nil, packageInstallErrorHandler(err, pkg, installable)
-			}
-			isInStore, err := nix.StorePathsAreInStore(ctx, storePaths)
-			if err != nil {
-				return nil, err
-			}
-			if !isInStore {
-				packagesToInstall = append(packagesToInstall, pkg)
+				break
 			}
 		}
 	}
 
 	return lo.Uniq(packagesToInstall), nil
-}
-
-// packageInstallErrorHandler checks for two kinds of errors to print custom messages for so that Devbox users
-// can work around them:
-// 1. Packages that cannot be installed on the current system, but may be installable on other systems.packageInstallErrorHandler
-// 2. Packages marked insecure by nix
-func packageInstallErrorHandler(err error, pkg *devpkg.Package, installableOrEmpty string) error {
-	if err == nil {
-		return nil
-	}
-
-	// Check if the user is installing a package that cannot be installed on their platform.
-	// For example, glibcLocales on MacOS will give the following error:
-	// flake output attribute 'legacyPackages.x86_64-darwin.glibcLocales' is not a derivation or path
-	// This is because glibcLocales is only available on Linux.
-	// The user should try `devbox add` again with `--exclude-platform`
-	errMessage := strings.TrimSpace(err.Error())
-
-	// Sample error from `devbox add glibcLocales` on a mac:
-	// error: flake output attribute 'legacyPackages.x86_64-darwin.glibcLocales' is not a derivation or path
-	maybePackageSystemCompatibilityErrorType1 := strings.Contains(errMessage, "error: flake output attribute") &&
-		strings.Contains(errMessage, "is not a derivation or path")
-	// Sample error from `devbox add sublime4` on a mac:
-	// error: Package ‘sublimetext4-4169’ in /nix/store/nlbjx0mp83p2qzf1rkmzbgvq1wxfir81-source/pkgs/applications/editors/sublime/4/common.nix:168 is not available on the requested hostPlatform:
-	//     hostPlatform.config = "x86_64-apple-darwin"
-	//     package.meta.platforms = [
-	//       "aarch64-linux"
-	//       "x86_64-linux"
-	//    ]
-	maybePackageSystemCompatibilityErrorType2 := strings.Contains(errMessage, "is not available on the requested hostPlatform")
-
-	if maybePackageSystemCompatibilityErrorType1 || maybePackageSystemCompatibilityErrorType2 {
-		platform := nix.System()
-		return usererr.WithUserMessage(
-			err,
-			"package %s cannot be installed on your platform %s.\n"+
-				"If you know this package is incompatible with %[2]s, then "+
-				"you could run `devbox add %[1]s --exclude-platform %[2]s` and re-try.\n"+
-				"If you think this package should be compatible with %[2]s, then "+
-				"it's possible this particular version is not available yet from the nix registry. "+
-				"You could try `devbox add` with a different version for this package.\n\n"+
-				"Underlying Error from nix is:",
-			pkg.Versioned(),
-			platform,
-		)
-	}
-
-	if isInsecureErr, userErr := nix.IsExitErrorInsecurePackage(err, pkg.Versioned(), installableOrEmpty); isInsecureErr {
-		return userErr
-	}
-
-	return usererr.WithUserMessage(err, "error installing package %s", pkg.Raw)
 }
 
 // moveAllowInsecureFromLockfile will modernize a Devbox project by moving the allow_insecure: boolean

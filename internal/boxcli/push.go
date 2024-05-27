@@ -44,7 +44,7 @@ func pushCmdFunc(cmd *cobra.Command, url string, flags pushCmdFlags) error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	t, err := identity.Get().GenSession(cmd.Context())
+	t, err := identity.GenSession(cmd.Context())
 	var creds devopt.Credentials
 	if err != nil && !errors.Is(err, auth.ErrNotLoggedIn) {
 		return errors.WithStack(err)

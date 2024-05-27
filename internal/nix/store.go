@@ -48,49 +48,77 @@ func StorePathsFromInstallable(ctx context.Context, installable string, allowIns
 
 		return nil, err
 	}
-	return parseStorePathFromInstallableOutput(installable, resultBytes)
+
+	validPaths, err := parseStorePathFromInstallableOutput(resultBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse path-info for %s: %w", installable, err)
+	}
+
+	return maps.Keys(validPaths), nil
 }
 
-// StorePathsAreInStore returns true if the store path is in the store
-// It relies on `nix store ls` to check if the store path is in the store
-func StorePathsAreInStore(ctx context.Context, storePaths []string) (bool, error) {
+// StorePathsAreInStore a map of store paths to whether they are in the store.
+func StorePathsAreInStore(ctx context.Context, storePaths []string) (map[string]bool, error) {
 	defer debug.FunctionTimer().End()
-	for _, storePath := range storePaths {
-		cmd := commandContext(ctx, "store", "ls", storePath)
-		debug.Log("Running cmd %s", cmd)
-		if err := cmd.Run(); err != nil {
-			if exitErr := (&exec.ExitError{}); errors.As(err, &exitErr) {
-				return false, nil
-			}
-			return false, err
-		}
+	if len(storePaths) == 0 {
+		return map[string]bool{}, nil
 	}
-	return true, nil
+	args := append([]string{"path-info", "--offline", "--json"}, storePaths...)
+	cmd := commandContext(ctx, args...)
+	debug.Log("Running cmd %s", cmd)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	validPaths, err := parseStorePathFromInstallableOutput(output)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string]bool{}
+	for _, storePath := range storePaths {
+		_, ok := validPaths[storePath]
+		result[storePath] = ok
+	}
+
+	return result, nil
+}
+
+// Older nix versions (like 2.17) are an array of objects that contain path and valid fields
+type pathInfoLegacy struct {
+	Path  string `json:"path"`
+	Valid bool   `json:"valid"`
 }
 
 // parseStorePathFromInstallableOutput parses the output of `nix store path-from-installable --json`
 // This function is decomposed out of StorePathFromInstallable to make it testable.
-func parseStorePathFromInstallableOutput(installable string, output []byte) ([]string, error) {
-	// Newer nix versions (like 2.20)
+func parseStorePathFromInstallableOutput(output []byte) (map[string]any, error) {
+	// Newer nix versions (like 2.20) have output of the form
+	// {"<store-path>": {}}
+	// if a store path is used as an installable, the keys will be present even if invalid but
+	// the values will be null.
 	var out1 map[string]any
 	if err := json.Unmarshal(output, &out1); err == nil {
-		return maps.Keys(out1), nil
+		maps.DeleteFunc(out1, func(k string, v any) bool {
+			return v == nil
+		})
+		return out1, nil
 	}
 
-	// Older nix versions (like 2.17)
-	var out2 []struct {
-		Path  string `json:"path"`
-		Valid bool   `json:"valid"`
-	}
+	var out2 []pathInfoLegacy
+
 	if err := json.Unmarshal(output, &out2); err == nil {
-		res := []string{}
+		res := map[string]any{}
 		for _, outValue := range out2 {
-			res = append(res, outValue.Path)
+			if outValue.Valid {
+				res[outValue.Path] = true
+			}
 		}
 		return res, nil
 	}
 
-	return nil, fmt.Errorf("failed to parse store path from installable (%s) output: %s", installable, output)
+	return nil, fmt.Errorf("failed to parse path-info output: %s", output)
 }
 
 // DaemonError reports an unsuccessful attempt to connect to the Nix daemon.

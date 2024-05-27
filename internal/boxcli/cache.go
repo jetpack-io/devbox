@@ -89,7 +89,7 @@ func cacheConfigureCmd() *cobra.Command {
 				u, _ := user.Current()
 				username = u.Username
 			}
-			return nixcache.Get().ConfigureReprompt(cmd.Context(), username)
+			return nixcache.ConfigureReprompt(cmd.Context(), username)
 		},
 	}
 	cmd.Flags().StringVar(&username, "user", "", "")
@@ -104,7 +104,7 @@ func cacheCredentialsCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			creds, err := nixcache.Get().Credentials(cmd.Context())
+			creds, err := nixcache.CachedCredentials(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -136,7 +136,7 @@ func cacheInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// TODO(gcurtis): We can also output info about the daemon config status
 			// here
-			caches, err := nixcache.Get().Caches(cmd.Context())
+			caches, err := nixcache.Caches(cmd.Context())
 			if err != nil {
 				return err
 			}
