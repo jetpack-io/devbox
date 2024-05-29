@@ -21,8 +21,12 @@ import (
 	"go.jetpack.io/devbox/internal/ux"
 )
 
-func Configure(ctx context.Context, username string) error {
-	return configure(ctx, username, false)
+func Configure(ctx context.Context) error {
+	u, err := user.Current()
+	if err != nil {
+		return redact.Errorf("nixcache: lookup current user: %v", err)
+	}
+	return configure(ctx, u.Username, false)
 }
 
 func ConfigureReprompt(ctx context.Context, username string) error {
@@ -39,8 +43,8 @@ func configure(ctx context.Context, username string, reprompt bool) error {
 	const sudoPrompt = "You're logged into a Devbox account that now has access to a Nix cache. " +
 		"Allow Devbox to configure Nix to use the new cache (requires sudo)?"
 	err := setup.ConfirmRun(ctx, key, task, sudoPrompt)
-	if err != nil && !errors.Is(err, setup.ErrUserRefused) {
-		return redact.Errorf("nixcache: run setup: %v", err)
+	if err != nil {
+		return redact.Errorf("nixcache: run setup: %w", err)
 	}
 	return nil
 }
@@ -88,6 +92,13 @@ func (s *setupTask) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Update the AWS config before configuring and restarting the Nix
+	// daemon.
+	err = s.updateAWSConfig()
+	if err != nil {
+		return redact.Errorf("update root aws config: %v", err)
+	}
+
 	trusted := false
 	cfg, err := nix.CurrentConfig(ctx)
 	if err == nil {
@@ -100,11 +111,6 @@ func (s *setupTask) Run(ctx context.Context) error {
 		} else if err != nil {
 			return redact.Errorf("update nix config: %v", err)
 		}
-	}
-
-	err = s.updateAWSConfig()
-	if err != nil {
-		return redact.Errorf("update root aws config: %v", err)
 	}
 	return nil
 }

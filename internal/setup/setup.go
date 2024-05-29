@@ -177,7 +177,10 @@ func ConfirmRun(ctx context.Context, key string, task Task, prompt string) error
 
 var defaultPrompt = func(msg string) (response any, err error) {
 	if isatty.IsTerminal(os.Stdin.Fd()) {
-		err = survey.AskOne(&survey.Confirm{Message: msg}, &response)
+		err = survey.AskOne(&survey.Confirm{
+			Message: msg,
+			Default: true,
+		}, &response)
 		return response, err
 	}
 	debug.Log("setup: no tty detected, assuming yes to confirmation prompt: %q", msg)
