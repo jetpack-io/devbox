@@ -23,7 +23,7 @@ import (
 	"go.jetpack.io/pkg/filecache"
 )
 
-var cachedCredentials = goutil.OnceWithContext(
+var cachedCredentials = goutil.OnceValuesWithContext(
 	func(ctx context.Context) (AWSCredentials, error) {
 		// Adding version to caches to avoid conflicts if we want to update the schema
 		// or while working on dev.
@@ -85,7 +85,7 @@ func Caches(
 	return resp.GetCaches(), nil
 }
 
-var cachedReadCaches = goutil.OnceWithContext(
+var cachedReadCaches = goutil.OnceValuesWithContext(
 	func(ctx context.Context) ([]*nixv1alpha1.NixBinCache, error) {
 		caches, err := Caches(ctx)
 		if err != nil {
@@ -102,7 +102,7 @@ func CachedReadCaches(ctx context.Context) ([]*nixv1alpha1.NixBinCache, error) {
 }
 
 func DisableReadCaches() {
-	cachedReadCaches = goutil.OnceWithContext(
+	cachedReadCaches = goutil.OnceValuesWithContext(
 		func(ctx context.Context) ([]*nixv1alpha1.NixBinCache, error) {
 			return nil, nil
 		},

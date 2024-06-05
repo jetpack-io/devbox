@@ -40,6 +40,12 @@ type globalProcessComposeConfig struct {
 	File      *os.File `json:"-"`
 }
 
+type ProcessComposeOpts struct {
+	BinPath    string
+	ExtraFlags []string
+	Background bool
+}
+
 func newGlobalProcessComposeConfig() *globalProcessComposeConfig {
 	return &globalProcessComposeConfig{Instances: map[string]instance{}}
 }
@@ -98,13 +104,11 @@ func openGlobalConfigFile() (*os.File, error) {
 }
 
 func StartProcessManager(
-	ctx context.Context,
 	w io.Writer,
 	requestedServices []string,
 	availableServices Services,
 	projectDir string,
-	processComposeBinPath string,
-	processComposeBackground bool,
+	processComposeConfig ProcessComposeOpts,
 ) error {
 	// Check if process-compose is already running
 	if ProcessManagerIsRunning(projectDir) {
@@ -150,13 +154,15 @@ func StartProcessManager(
 		flags = append(flags, "-f", s.ProcessComposePath)
 	}
 
-	if processComposeBackground {
+	flags = append(flags, processComposeConfig.ExtraFlags...)
+
+	if processComposeConfig.Background {
 		flags = append(flags, "-t=false")
-		cmd := exec.Command(processComposeBinPath, flags...)
+		cmd := exec.Command(processComposeConfig.BinPath, flags...)
 		return runProcessManagerInBackground(cmd, config, port, projectDir)
 	}
 
-	cmd := exec.Command(processComposeBinPath, flags...)
+	cmd := exec.Command(processComposeConfig.BinPath, flags...)
 	return runProcessManagerInForeground(cmd, config, port, projectDir, w)
 }
 

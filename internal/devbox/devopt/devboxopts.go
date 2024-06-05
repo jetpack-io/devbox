@@ -19,6 +19,11 @@ type Opts struct {
 	Stderr                   io.Writer
 }
 
+type ProcessComposeOpts struct {
+	ExtraFlags []string
+	Background bool
+}
+
 type GenerateOpts struct {
 	ForType  string
 	Force    bool
