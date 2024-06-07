@@ -191,6 +191,10 @@ const (
 	MinVersion = Version2_12
 )
 
+// versionRegexp matches the first line of "nix --version" output.
+// Semantic component sourced from https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+var versionRegexp = regexp.MustCompile(`^(.+) \(.+\) ((?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?)$`)
+
 // VersionInfo contains information about a Nix installation.
 type VersionInfo struct {
 	// Name is the executed program name (the first element of argv).
@@ -252,11 +256,12 @@ func parseVersionInfo(data []byte) (VersionInfo, error) {
 	}
 
 	lines := strings.Split(string(data), "\n")
-	found := false
-	info.Name, info.Version, found = strings.Cut(lines[0], " (Nix) ")
-	if !found {
+	matches := versionRegexp.FindStringSubmatch(lines[0])
+	if len(matches) < 3 {
 		return info, redact.Errorf("parse nix version: %s", redact.Safe(lines[0]))
 	}
+	info.Name = matches[1]
+	info.Version = matches[2]
 	for _, line := range lines {
 		name, value, found := strings.Cut(line, ": ")
 		if !found {

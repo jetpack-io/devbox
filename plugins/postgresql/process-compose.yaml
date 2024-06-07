@@ -8,3 +8,6 @@ processes:
       command: "pg_ctl stop -m fast"
     availability:
       restart: "always"
+    readiness_probe:
+      exec:
+        command: "pg_isready"

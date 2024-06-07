@@ -581,7 +581,7 @@ func (d *Devbox) StartServices(
 	if !services.ProcessManagerIsRunning(d.projectDir) {
 		fmt.Fprintln(d.stderr, "Process-compose is not running. Starting it now...")
 		fmt.Fprintln(d.stderr, "\nNOTE: We recommend using `devbox services up` to start process-compose and your services")
-		return d.StartProcessManager(ctx, runInCurrentShell, serviceNames, true, "")
+		return d.StartProcessManager(ctx, runInCurrentShell, serviceNames, devopt.ProcessComposeOpts{Background: true})
 	}
 
 	svcSet, err := d.Services()
@@ -703,7 +703,7 @@ func (d *Devbox) RestartServices(
 	if !services.ProcessManagerIsRunning(d.projectDir) {
 		fmt.Fprintln(d.stderr, "Process-compose is not running. Starting it now...")
 		fmt.Fprintln(d.stderr, "\nTip: We recommend using `devbox services up` to start process-compose and your services")
-		return d.StartProcessManager(ctx, runInCurrentShell, serviceNames, true, "")
+		return d.StartProcessManager(ctx, runInCurrentShell, serviceNames, devopt.ProcessComposeOpts{Background: true})
 	}
 
 	// TODO: Restart with no services should restart the _currently running_ services. This means we should get the list of running services from the process-compose, then restart them all.
@@ -731,18 +731,25 @@ func (d *Devbox) StartProcessManager(
 	ctx context.Context,
 	runInCurrentShell bool,
 	requestedServices []string,
-	background bool,
-	processComposeFileOrDir string,
+	processComposeOpts devopt.ProcessComposeOpts,
 ) error {
 	if !runInCurrentShell {
 		args := []string{"services", "up", "--run-in-current-shell"}
 		args = append(args, requestedServices...)
-		if processComposeFileOrDir != "" {
-			args = append(args, "--process-compose-file", processComposeFileOrDir)
+
+		// TODO: Here we're attempting to reconstruct arguments from the original command, so that we can reinvoke it in devbox shell.
+		// 		 Instead, we should consider refactoring this so that we can preserve and re-use the original command string,
+		//		 because the current approach is fragile and will need to be updated each time we add new flags.
+		if d.customProcessComposeFile != "" {
+			args = append(args, "--process-compose-file", d.customProcessComposeFile)
 		}
-		if background {
+		if processComposeOpts.Background {
 			args = append(args, "--background")
 		}
+		for _, flag := range processComposeOpts.ExtraFlags {
+			args = append(args, "--pcflags", flag)
+		}
+
 		return d.RunScript(ctx, "devbox", args)
 	}
 
@@ -761,25 +768,42 @@ func (d *Devbox) StartProcessManager(
 		}
 	}
 
+	servicesProcessComposeOpts, err := d.configureProcessCompose(ctx, processComposeOpts)
+	if err != nil {
+		return err
+	}
+
+	// Start the process manager
+
+	return services.StartProcessManager(
+		d.stderr,
+		requestedServices,
+		svcs,
+		d.projectDir,
+		*servicesProcessComposeOpts,
+	)
+}
+
+func (d *Devbox) configureProcessCompose(ctx context.Context, processComposeOpts devopt.ProcessComposeOpts) (*services.ProcessComposeOpts, error) {
 	processComposePath, err := utilityLookPath("process-compose")
 	if err != nil {
 		fmt.Fprintln(d.stderr, "Installing process-compose. This may take a minute but will only happen once.")
 		if err = d.addDevboxUtilityPackage(ctx, "github:F1bonacc1/process-compose/"+processComposeTargetVersion); err != nil {
-			return err
+			return nil, err
 		}
 
 		// re-lookup the path to process-compose
 		processComposePath, err = utilityLookPath("process-compose")
 		if err != nil {
 			fmt.Fprintln(d.stderr, "failed to find process-compose after installing it.")
-			return err
+			return nil, err
 		}
 	}
 	re := regexp.MustCompile(`(?m)Version:\s*(v\d*\.\d*\.\d*)`)
 	pcVersionString, err := exec.Command(processComposePath, "version").Output()
 	if err != nil {
 		fmt.Fprintln(d.stderr, "failed to get process-compose version")
-		return err
+		return nil, err
 	}
 
 	pcVersion := re.FindStringSubmatch(strings.TrimSpace(string(pcVersionString)))[1]
@@ -790,25 +814,19 @@ func (d *Devbox) StartProcessManager(
 		newProcessComposePkg := "github:F1bonacc1/process-compose/" + processComposeTargetVersion
 		// Find the old process Compose package
 		if err := d.removeDevboxUtilityPackage(ctx, oldProcessComposePkg); err != nil {
-			return err
+			return nil, err
 		}
 
 		if err = d.addDevboxUtilityPackage(ctx, newProcessComposePkg); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	// Start the process manager
-
-	return services.StartProcessManager(
-		ctx,
-		d.stderr,
-		requestedServices,
-		svcs,
-		d.projectDir,
-		processComposePath,
-		background,
-	)
+	return &services.ProcessComposeOpts{
+		BinPath:    processComposePath,
+		Background: processComposeOpts.Background,
+		ExtraFlags: processComposeOpts.ExtraFlags,
+	}, nil
 }
 
 // computeEnv computes the set of environment variables that define a Devbox

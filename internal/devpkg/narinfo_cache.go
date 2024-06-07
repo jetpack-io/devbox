@@ -16,6 +16,7 @@ import (
 	"go.jetpack.io/devbox/internal/boxcli/featureflag"
 	"go.jetpack.io/devbox/internal/debug"
 	"go.jetpack.io/devbox/internal/devbox/providers/nixcache"
+	"go.jetpack.io/devbox/internal/goutil"
 	"go.jetpack.io/devbox/internal/lock"
 	"go.jetpack.io/devbox/internal/nix"
 	"golang.org/x/sync/errgroup"
@@ -339,8 +340,14 @@ func fetchNarInfoStatusFromS3(
 	return fetch.(func() (bool, error))()
 }
 
+var nixCacheIsConfigured = goutil.OnceValueWithContext(nixcache.IsConfigured)
+
 func readCaches(ctx context.Context) ([]string, error) {
 	cacheURIs := []string{binaryCache}
+	if !nixCacheIsConfigured.Do(ctx) {
+		return cacheURIs, nil
+	}
+
 	otherCaches, err := nixcache.CachedReadCaches(ctx)
 	if err != nil {
 		return nil, err

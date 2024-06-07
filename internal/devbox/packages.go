@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime/trace"
 	"slices"
@@ -25,10 +24,10 @@ import (
 	"go.jetpack.io/devbox/internal/devpkg"
 	"go.jetpack.io/devbox/internal/devpkg/pkgtype"
 	"go.jetpack.io/devbox/internal/lock"
-	"go.jetpack.io/devbox/internal/redact"
+	"go.jetpack.io/devbox/internal/setup"
 	"go.jetpack.io/devbox/internal/shellgen"
 	"go.jetpack.io/devbox/internal/telemetry"
-	nixv1alpha1 "go.jetpack.io/pkg/api/gen/priv/nix/v1alpha1"
+	"go.jetpack.io/pkg/auth"
 
 	"go.jetpack.io/devbox/internal/boxcli/usererr"
 	"go.jetpack.io/devbox/internal/debug"
@@ -461,42 +460,9 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 		Flags:  flags,
 		Writer: d.stderr,
 	}
-	caches, err := nixcache.CachedReadCaches(ctx)
+	err = d.appendExtraSubstituters(ctx, args)
 	if err != nil {
-		debug.Log("error getting nix cache URI, assuming user doesn't have access: %v", err)
-	}
-
-	args.ExtraSubstituters = lo.Map(
-		caches, func(c *nixv1alpha1.NixBinCache, _ int) string {
-			return c.GetUri()
-		})
-
-	// TODO (Landau): handle errors that are not auth.ErrNotLoggedIn
-	// Only lookup credentials if we have a cache to use
-	if len(args.ExtraSubstituters) > 0 {
-		creds, err := nixcache.CachedCredentials(ctx)
-		if err == nil {
-			args.Env = creds.Env()
-		}
-
-		u, err := user.Current()
-		if err != nil {
-			err = redact.Errorf("lookup current user: %v", err)
-			debug.Log("error configuring cache: %v", err)
-		}
-		err = nixcache.Configure(ctx, u.Username)
-		if err != nil {
-			debug.Log("error configuring cache: %v", err)
-
-			var daemonErr *nix.DaemonError
-			if errors.As(err, &daemonErr) {
-				// Error here to give the user a chance to restart the daemon.
-				return usererr.New("Devbox configured Nix to use a new cache. Please restart the Nix daemon and re-run Devbox.")
-			}
-			// Other errors indicate we couldn't update nix.conf, so just warn and continue
-			// by building from source if necessary.
-			ux.Fwarning(d.stderr, "Devbox was unable to configure Nix to use your organization's private cache. Some packages might be built from source.\n")
-		}
+		return err
 	}
 
 	packageNames := lo.Map(
@@ -537,6 +503,54 @@ func (d *Devbox) installNixPackagesToStore(ctx context.Context, mode installMode
 		})
 	}
 
+	return nil
+}
+
+func (d *Devbox) appendExtraSubstituters(ctx context.Context, args *nix.BuildArgs) error {
+	creds, err := nixcache.CachedCredentials(ctx)
+	if errors.Is(err, auth.ErrNotLoggedIn) {
+		return nil
+	}
+	if err != nil {
+		ux.Fwarning(d.stderr, "Devbox was unable to authenticate with the Jetify Nix cache. Some packages might be built from source.\n")
+		return nil //nolint:nilerr
+	}
+
+	caches, err := nixcache.CachedReadCaches(ctx)
+	if err != nil {
+		debug.Log("error getting list of caches from the Jetify API, assuming the user doesn't have access to any: %v", err)
+		return nil
+	}
+	if len(caches) == 0 {
+		return nil
+	}
+
+	err = nixcache.Configure(ctx)
+	if errors.Is(err, setup.ErrAlreadyRefused) {
+		debug.Log("user previously refused to configure nix cache, not re-prompting")
+		return nil
+	}
+	if errors.Is(err, setup.ErrUserRefused) {
+		ux.Finfo(d.stderr, "Skipping cache setup. Run `devbox cache configure` to enable the cache at a later time.\n")
+		return nil
+	}
+	var daemonErr *nix.DaemonError
+	if errors.As(err, &daemonErr) {
+		// Error here to give the user a chance to restart the daemon.
+		return usererr.New("Devbox configured Nix to use a new cache. Please restart the Nix daemon and re-run Devbox.")
+	}
+	// Other errors indicate we couldn't update nix.conf, so just warn and
+	// continue by building from source if necessary.
+	if err != nil {
+		debug.Log("error configuring nix cache: %v", err)
+		ux.Fwarning(d.stderr, "Devbox was unable to configure Nix to use the Jetify Nix cache. Some packages might be built from source.\n")
+		return nil
+	}
+
+	for _, cache := range caches {
+		args.ExtraSubstituters = append(args.ExtraSubstituters, cache.GetUri())
+	}
+	args.Env = append(args.Env, creds.Env()...)
 	return nil
 }
 

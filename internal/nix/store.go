@@ -49,12 +49,12 @@ func StorePathsFromInstallable(ctx context.Context, installable string, allowIns
 		return nil, err
 	}
 
-	validPaths, err := parseStorePathFromInstallableOutput(resultBytes)
+	paths, err := parseStorePathFromInstallableOutput(resultBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse path-info for %s: %w", installable, err)
 	}
 
-	return maps.Keys(validPaths), nil
+	return maps.Keys(paths), nil
 }
 
 // StorePathsAreInStore a map of store paths to whether they are in the store.
@@ -71,51 +71,39 @@ func StorePathsAreInStore(ctx context.Context, storePaths []string) (map[string]
 		return nil, err
 	}
 
-	validPaths, err := parseStorePathFromInstallableOutput(output)
-	if err != nil {
-		return nil, err
-	}
-
-	result := map[string]bool{}
-	for _, storePath := range storePaths {
-		_, ok := validPaths[storePath]
-		result[storePath] = ok
-	}
-
-	return result, nil
+	return parseStorePathFromInstallableOutput(output)
 }
 
 // Older nix versions (like 2.17) are an array of objects that contain path and valid fields
-type pathInfoLegacy struct {
+type LegacyPathInfo struct {
 	Path  string `json:"path"`
-	Valid bool   `json:"valid"`
+	Valid bool   `json:"valid"` // this means path is in store
 }
 
 // parseStorePathFromInstallableOutput parses the output of `nix store path-from-installable --json`
+// into a map of store paths to whether they are in the store.
 // This function is decomposed out of StorePathFromInstallable to make it testable.
-func parseStorePathFromInstallableOutput(output []byte) (map[string]any, error) {
+func parseStorePathFromInstallableOutput(output []byte) (map[string]bool, error) {
+	result := map[string]bool{}
+
 	// Newer nix versions (like 2.20) have output of the form
 	// {"<store-path>": {}}
-	// if a store path is used as an installable, the keys will be present even if invalid but
-	// the values will be null.
-	var out1 map[string]any
-	if err := json.Unmarshal(output, &out1); err == nil {
-		maps.DeleteFunc(out1, func(k string, v any) bool {
-			return v == nil
-		})
-		return out1, nil
+	// Note that values will be null if paths are not in store.
+	var modernPathInfo map[string]any
+	if err := json.Unmarshal(output, &modernPathInfo); err == nil {
+		for path, val := range modernPathInfo {
+			result[path] = val != nil
+		}
+		return result, nil
 	}
 
-	var out2 []pathInfoLegacy
+	var legacyPathInfos []LegacyPathInfo
 
-	if err := json.Unmarshal(output, &out2); err == nil {
-		res := map[string]any{}
-		for _, outValue := range out2 {
-			if outValue.Valid {
-				res[outValue.Path] = true
-			}
+	if err := json.Unmarshal(output, &legacyPathInfos); err == nil {
+		for _, outValue := range legacyPathInfos {
+			result[outValue.Path] = outValue.Valid
 		}
-		return res, nil
+		return result, nil
 	}
 
 	return nil, fmt.Errorf("failed to parse path-info output: %s", output)

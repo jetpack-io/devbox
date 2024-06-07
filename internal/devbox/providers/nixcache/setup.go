@@ -21,26 +21,47 @@ import (
 	"go.jetpack.io/devbox/internal/ux"
 )
 
-func Configure(ctx context.Context, username string) error {
-	return configure(ctx, username, false)
+const setupKey = "nixcache-setup"
+
+func IsConfigured(ctx context.Context) bool {
+	u, err := user.Current()
+	if err != nil {
+		return false
+	}
+	task := &setupTask{u.Username}
+	status := setup.Status(ctx, setupKey, task)
+	return status == setup.TaskDone
+}
+
+func Configure(ctx context.Context) error {
+	u, err := user.Current()
+	if err != nil {
+		return redact.Errorf("nixcache: lookup current user: %v", err)
+	}
+
+	task := &setupTask{u.Username}
+
+	// This function might be called from other Devbox commands
+	// (such as devbox add), so we need to provide some context in the sudo
+	// prompt.
+	const sudoPrompt = "You're logged into a Devbox account, but Nix isn't setup to use your account's caches. " +
+		"Allow sudo to configure Nix?"
+	err = setup.ConfirmRun(ctx, setupKey, task, sudoPrompt)
+	if err != nil {
+		return redact.Errorf("nixcache: run setup: %w", err)
+	}
+	return nil
 }
 
 func ConfigureReprompt(ctx context.Context, username string) error {
-	return configure(ctx, username, true)
-}
-
-func configure(ctx context.Context, username string, reprompt bool) error {
-	const key = "nixcache-setup"
-	if reprompt {
-		setup.Reset(key)
-	}
-
+	setup.Reset(setupKey)
 	task := &setupTask{username}
-	const sudoPrompt = "You're logged into a Devbox account that now has access to a Nix cache. " +
-		"Allow Devbox to configure Nix to use the new cache (requires sudo)?"
-	err := setup.ConfirmRun(ctx, key, task, sudoPrompt)
-	if err != nil && !errors.Is(err, setup.ErrUserRefused) {
-		return redact.Errorf("nixcache: run setup: %v", err)
+
+	// We're reprompting, so the user explicitly asked to configure the
+	// cache. We can keep the sudo prompt short.
+	err := setup.ConfirmRun(ctx, setupKey, task, "Allow sudo to configure Nix?")
+	if err != nil {
+		return redact.Errorf("nixcache: run setup: %w", err)
 	}
 	return nil
 }
@@ -88,6 +109,13 @@ func (s *setupTask) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Update the AWS config before configuring and restarting the Nix
+	// daemon.
+	err = s.updateAWSConfig()
+	if err != nil {
+		return redact.Errorf("update root aws config: %v", err)
+	}
+
 	trusted := false
 	cfg, err := nix.CurrentConfig(ctx)
 	if err == nil {
@@ -100,11 +128,6 @@ func (s *setupTask) Run(ctx context.Context) error {
 		} else if err != nil {
 			return redact.Errorf("update nix config: %v", err)
 		}
-	}
-
-	err = s.updateAWSConfig()
-	if err != nil {
-		return redact.Errorf("update root aws config: %v", err)
 	}
 	return nil
 }
