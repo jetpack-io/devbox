@@ -1,10 +1,11 @@
 {
     "name": "postgresql",
-    "version": "0.0.2",
-    "description": "To initialize the database run `initdb`.",
+    "version": "0.0.3",
+    "description": "To initialize the database run `initdb`.\nIf you want to install extensions with Postgres, make sure to add the lib output with `devbox add postgresql --outputs=out,lib`",
     "env": {
         "PGDATA": "{{ .Virtenv }}/data",
-        "PGHOST": "{{ .Virtenv }}"
+        "PGHOST": "{{ .Virtenv }}",
+        "NIX_PGLIBDIR": "{{ .DevboxProfileDefault }}/lib"
     },
     "create_files": {
         "{{ .Virtenv }}/data": "",

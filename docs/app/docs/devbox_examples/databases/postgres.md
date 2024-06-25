@@ -25,6 +25,25 @@ Alternatively, you can add the following to your devbox.json:
 
 This will install the latest version of Postgres. You can find other installable versions of Postgres by running `devbox search postgresql`. You can also view the available versions on [Nixhub](https://www.nixhub.io/packages/postgresql)
 
+## Installing Extensions with PostgreSQL
+
+To install and use extensions in PostgreSQL, you should first install the `lib` output for Postgres by running `devbox add postgresql --outputs=out,lib`: 
+
+```json
+  "packages": {
+    "postgresql": {
+      "version": "latest",
+      "outputs": ["out", "lib"]
+    },
+  }
+```
+
+You can then install the extension using `devbox add postgresqlXXpackages.extension`, where `XX` is the major version of Postgres that you are using. For example, to install Postgis for PostgreSQL 15, you can run: 
+
+```bash
+devbox add postgresql15Packages.postgis
+```
+
 ## PostgreSQL Plugin Support
 
 Devbox will automatically create the following configuration when you run `devbox add postgresql`:
@@ -38,8 +57,7 @@ You can use `devbox services start|stop postgresql` to start or stop the Postgre
 
 `PGHOST=./.devbox/virtenv/postgresql`
 `PGDATA=./.devbox/virtenv/postgresql/data`
-
-This variable tells PostgreSQL which directory to use for creating and storing databases.
+`NIX_PGLIBDIR=./.devbox/nix/profile/default/lib`
 
 ### Notes
 
