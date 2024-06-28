@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
+  "packages": [
+    "micromamba@latest",
+  ],
+  "shell": {
+    "init_hook": [
+      "stat .devbox/virtenv/micromamba/envs/my-env > /dev/null 2>&1 || micromamba create -n my-env python=3.12 -c conda-forge -r .devbox/virtenv/micromamba/ -y -q",
+      "eval \"$(micromamba shell hook --shell posix)\"",
+      "micromamba activate .devbox/virtenv/micromamba/envs/my-env",
+      "pip install -r requirements.txt -q",
+    ],
+    "scripts": {
+      "run_test": [
+        "python main.py",
+      ],
+    },
+  },
+}

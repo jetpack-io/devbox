@@ -1,0 +1,53 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "micromamba@latest": {
+      "last_modified": "2024-06-12T20:55:33Z",
+      "resolved": "github:NixOS/nixpkgs/a9858885e197f984d92d7fe64e9fff6b2e488d40#micromamba",
+      "source": "devbox-search",
+      "version": "1.5.8",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5wvayrv6diqc1r555cgji9mfxamsb2v0-micromamba-1.5.8",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/5wvayrv6diqc1r555cgji9mfxamsb2v0-micromamba-1.5.8"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/jm2yicqavr3rzinpsqa0r7q497mxbsnn-micromamba-1.5.8",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/jm2yicqavr3rzinpsqa0r7q497mxbsnn-micromamba-1.5.8"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/g7hpi7zi1ib2c024xb1cjcrlb9417hqv-micromamba-1.5.8",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/g7hpi7zi1ib2c024xb1cjcrlb9417hqv-micromamba-1.5.8"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/816z6c52fcindm5k4pzwl6x8ic8zx6aq-micromamba-1.5.8",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/816z6c52fcindm5k4pzwl6x8ic8zx6aq-micromamba-1.5.8"
+        }
+      }
+    }
+  }
+}
