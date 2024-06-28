@@ -39,8 +39,3 @@ func Init(dir string) (created bool, err error) {
 	}
 	return true, nil
 }
-
-func Open(projectDir string) (*Config, error) {
-	cfgPath := filepath.Join(projectDir, configfile.DefaultName)
-	return readFromFile(cfgPath)
-}

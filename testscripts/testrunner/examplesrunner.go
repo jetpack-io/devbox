@@ -43,7 +43,7 @@ func RunDevboxTestscripts(t *testing.T, dir string) {
 		}
 
 		configPath := filepath.Join(path, "devbox.json")
-		config, err := devconfig.LoadForTest(configPath)
+		config, err := devconfig.Open(configPath)
 		if err != nil {
 			// skip directories that do not have a devbox.json defined
 			if errors.Is(err, fs.ErrNotExist) {

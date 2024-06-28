@@ -76,14 +76,24 @@ func InitConfig(dir string) (bool, error) {
 }
 
 func Open(opts *devopt.Opts) (*Devbox, error) {
-	projectDir, err := findProjectDir(opts.Dir)
-	if err != nil {
-		return nil, err
+	var cfg *devconfig.Config
+	var err error
+	if opts.Dir == "" {
+		cfg, err = devconfig.Find(".")
+		if errors.Is(err, devconfig.ErrNotFound) {
+			return nil, usererr.New("no devbox.json found in the current directory (or any parent directories). Did you run `devbox init` yet?")
+		}
+	} else {
+		cfg, err = devconfig.Open(opts.Dir)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, usererr.New("the devbox config path %q does not exist.", opts.Dir)
+		}
+		if errors.Is(err, devconfig.ErrNotFound) {
+			return nil, usererr.New("no devbox.json found in %q. Did you run `devbox init` yet?", opts.Dir)
+		}
 	}
-
-	cfg, err := devconfig.Open(projectDir)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, usererr.WithUserMessage(err, "Error loading devbox.json.")
 	}
 
 	environment, err := validateEnvironment(opts.Environment)
@@ -96,7 +106,7 @@ func Open(opts *devopt.Opts) (*Devbox, error) {
 		env:                      opts.Env,
 		environment:              environment,
 		nix:                      &nix.Nix{},
-		projectDir:               projectDir,
+		projectDir:               filepath.Dir(cfg.Root.AbsRootPath),
 		pluginManager:            plugin.NewManager(),
 		stderr:                   opts.Stderr,
 		customProcessComposeFile: opts.CustomProcessComposeFile,

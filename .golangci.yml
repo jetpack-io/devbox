@@ -38,6 +38,8 @@ linters-settings:
       - name: bare-return
       - name: bool-literal-in-expr
       - name: cognitive-complexity
+        exclude:
+          - "**_test.go"
         arguments:
           - 32 # TODO: gradually reduce it
       - name: datarace
