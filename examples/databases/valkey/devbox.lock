@@ -1,0 +1,53 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "valkey@latest": {
+      "last_modified": "2024-05-22T06:18:38Z",
+      "resolved": "github:NixOS/nixpkgs/3f316d2a50699a78afe5e77ca486ad553169061e#valkey",
+      "source": "devbox-search",
+      "version": "7.2.5",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/sn76cyfbi5lpyhyn7sc8aqdy99sdd191-valkey-7.2.5",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/sn76cyfbi5lpyhyn7sc8aqdy99sdd191-valkey-7.2.5"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/lr5k23d54ip8794jjdzwv0rbfj1rfakw-valkey-7.2.5",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/lr5k23d54ip8794jjdzwv0rbfj1rfakw-valkey-7.2.5"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3mv8kr5skz6yd9xqrsv667gz8xnn4zy0-valkey-7.2.5",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/3mv8kr5skz6yd9xqrsv667gz8xnn4zy0-valkey-7.2.5"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/7rhhn4kc4352jwq8saw2bfy6s5fnpv82-valkey-7.2.5",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/7rhhn4kc4352jwq8saw2bfy6s5fnpv82-valkey-7.2.5"
+        }
+      }
+    }
+  }
+}

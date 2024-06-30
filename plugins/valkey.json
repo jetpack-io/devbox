@@ -1,0 +1,13 @@
+{
+    "name": "valkey",
+    "version": "0.0.1",
+    "description": "Running `devbox services start valkey` will start valkey as a daemon in the background. \n\nYou can manually start Valkey in the foreground by running `valkey-server $VALKEY_CONF --port $VALKEY_PORT`. \n\nLogs, pidfile, and data dumps are stored in `.devbox/virtenv/valkey`. You can change this by modifying the `dir` directive in `devbox.d/valkey/valkey.conf`",
+    "env": {
+        "VALKEY_PORT": "6379",
+        "VALKEY_CONF": "{{ .DevboxDir }}/valkey.conf"
+    },
+    "create_files": {
+        "{{ .DevboxDir }}/valkey.conf": "valkey/valkey.conf",
+        "{{ .Virtenv }}/process-compose.yaml": "valkey/process-compose.yaml"
+    }
+}

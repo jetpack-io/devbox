@@ -30,6 +30,7 @@ Built-in plugins are available for the following packages. You can activate the 
 * [MySQL](../devbox_examples/databases/mysql.md) (mysql80, mysql57)
 * [PostgreSQL](../devbox_examples/databases/postgres.md) (postgresql)
 * [Redis](../devbox_examples/databases/redis.md) (redis)
+* [Valkey](../devbox_examples/databases/valkey.md) (valkey)
 * [PHP](../devbox_examples/languages/php.md) (php, php80, php81, php82...)
 * [Pip](../devbox_examples/languages/python.md) (python39Packages.pip, python310Packages.pip, python311Packages.pip...)
 * [Ruby](../devbox_examples/languages/ruby.md)(ruby, ruby_3_1, ruby_3_0...)

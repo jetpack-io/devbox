@@ -1,0 +1,9 @@
+{
+  "packages": ["valkey@latest"],
+  "shell": {
+    "init_hook": "",
+    "scripts": {
+      "valkey-cli": "valkey-cli"
+    }
+  }
+}

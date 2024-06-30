@@ -43,6 +43,7 @@ The following plugins provide a pre-configured service that can be managed with 
 * [Nginx](../devbox_examples/servers/nginx.md) (nginx)
 * [PostgreSQL](../devbox_examples/databases/postgres.md) (postgresql)
 * [Redis](../devbox_examples/databases/redis.md) (redis)
+* [Valkey](../devbox_examples/databases/valkey.md) (valkey)
 * [PHP](../devbox_examples/languages/php.md) (php, php80, php81, php82)
 
 The service will be made available to your project when you install the packages using `devbox add`.
